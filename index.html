@@ -44,7 +44,7 @@
         import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
         import { Triangle, Square, Circle, Hexagon, Trophy, Users, Play, Loader2, Key, CheckCircle2, XCircle, Beaker, BookOpen, GraduationCap, Settings } from 'lucide-react';
 
-        // --- CONFIGURAÇÃO FIREBASE (Sincronizada com as suas imagens) ---
+        // --- CONFIGURAÇÃO FIREBASE ---
         const myFirebaseConfig = {
             apiKey: "AIzaSyCQg38W6tun8YK9QALtnL1AAkUlV5q-dVs",
             authDomain: "superando-se.firebaseapp.com",
@@ -57,12 +57,12 @@
 
         let app, auth, db, appId;
         try {
-            // Verifica se está no ambiente de pré-visualização ou produção
             const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : myFirebaseConfig;
             app = initializeApp(finalConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-kahoot-app';
+            // Definir appId consistente para as regras do Firestore
+            appId = typeof __app_id !== 'undefined' ? __app_id : 'superando-app';
         } catch (error) {
             console.error("Erro Crítico Firebase:", error);
         }
@@ -91,7 +91,7 @@
                         }
                     } catch (err) {
                         console.error("Erro Autenticação:", err);
-                        setInitError("Falha na ligação ao servidor. Verifique se o 'Login Anónimo' está ativo no Firebase.");
+                        setInitError("Falha na ligação ao Firebase. Verifique se o login anónimo está ativo.");
                     }
                 };
                 initAuth();
@@ -113,7 +113,7 @@
                 return (
                     <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white">
                         <Loader2 className="w-16 h-16 animate-spin mb-4 opacity-50" />
-                        <p className="font-bold tracking-widest uppercase text-xs opacity-70">A carregar Superando-se...</p>
+                        <p className="font-bold tracking-widest uppercase text-xs opacity-70">A carregar...</p>
                     </div>
                 );
             }
@@ -129,7 +129,7 @@
 
         function HomeView({ setView }) {
             return (
-                <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-4">
+                <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-4 text-white">
                     <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full text-center border-b-8 border-gray-200">
                         <div className="flex justify-center mb-6">
                             <div className="bg-purple-100 p-6 rounded-full">
@@ -186,7 +186,7 @@
                     } catch (e) {}
                 }
                 if (working) { setActiveModel(working); setKeyStatus('valid'); }
-                else { setKeyStatus('invalid'); setErrorMsg("A chave Gemini não é válida ou a rede falhou."); }
+                else { setKeyStatus('invalid'); setErrorMsg("A chave Gemini não é válida."); }
             };
 
             const generateQuestions = async () => {
@@ -198,22 +198,37 @@
 
                 const prompt = `Atue como professor especialista de "${discipline}". Gere ${numQuestions} questões de múltipla escolha para o nível "${difficultyLevel}", estilo "${examModel}". 
                 Assunto Geral: "${generalContent}". Específico: "${specificContent}". 
-                Retorne estritamente um array JSON sem markdown: [{"question": "...", "options": ["A","B","C","D"], "correctIndex": 0}].`;
+                Retorne ESTRITAMENTE um array JSON: [{"question": "...", "options": ["A","B","C","D"], "correctIndex": 0}]. Não use markdown.`;
 
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
+
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        signal: controller.signal,
                         body: JSON.stringify({
                             contents: [{ parts: [{ text: prompt }] }],
                             generationConfig: { responseMimeType: "application/json" }
                         })
                     });
 
-                    if (!res.ok) throw new Error("A IA Gemini não respondeu corretamente.");
+                    clearTimeout(timeoutId);
+
+                    if (!res.ok) {
+                        const errorData = await res.json();
+                        throw new Error(errorData.error?.message || "Erro na API Gemini.");
+                    }
+
                     const data = await res.json();
-                    let rawText = data.candidates[0].content.parts[0].text;
-                    const questions = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+                    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!rawText) throw new Error("A IA não retornou texto.");
+
+                    // Limpeza agressiva de JSON
+                    const jsonMatch = rawText.match(/\[.*\]/s);
+                    const cleanJson = jsonMatch ? jsonMatch[0] : rawText;
+                    const questions = JSON.parse(cleanJson);
 
                     const pin = Math.floor(100000 + Math.random() * 900000).toString();
                     const gameData = {
@@ -222,13 +237,12 @@
                         createdAt: Date.now(), context: { discipline, generalContent }
                     };
 
-                    // Gravação no Firestore com tratamento de erro
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin), gameData);
                     setGame(gameData);
                     setStep('lobby');
                 } catch (err) {
-                    setErrorMsg("Erro: Certifique-se de que o ID do projeto é 'Superando' e as Regras do Firestore estão como 'if true'.");
                     console.error(err);
+                    setErrorMsg(err.name === 'AbortError' ? "A IA demorou muito a responder." : "Erro ao gerar: " + err.message);
                 } finally {
                     setIsGenerating(false);
                 }
@@ -238,11 +252,11 @@
                 if (!game?.pin) return;
                 const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
                     if (snap.exists()) setGame(snap.data());
-                }, (err) => console.error("Erro Game Snapshot:", err));
+                });
 
                 const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snap) => {
                     setPlayers(snap.docs.map(d => d.data()).filter(p => p.gameId === game.pin));
-                }, (err) => console.error("Erro Players Snapshot:", err));
+                });
 
                 return () => { unsubGame(); unsubPlayers(); };
             }, [game?.pin]);
@@ -260,7 +274,7 @@
                     }, 1000);
                 }
                 return () => clearInterval(interval);
-            }, [game?.status, game?.endTime, game?.pin]);
+            }, [game?.status, game?.endTime]);
 
             const startGame = () => {
                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
@@ -281,7 +295,7 @@
 
             const generateExplanations = async () => {
                 setIsGeneratingReport(true);
-                const prompt = `Gere uma resolução explicativa, clara e objetiva para estas questões de "${game.context?.discipline}": ${JSON.stringify(game.questions)}. Retorne array JSON: [{"explanation": "..."}].`;
+                const prompt = `Gere uma resolução explicativa para estas questões: ${JSON.stringify(game.questions)}. Retorne array JSON: [{"explanation": "..."}].`;
                 try {
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
                         method: 'POST',
@@ -289,10 +303,12 @@
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
                     const data = await res.json();
-                    const expls = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim());
-                    const updated = game.questions.map((q, i) => ({ ...q, explanation: expls[i]?.explanation || "Explicação não disponível." }));
+                    const raw = data.candidates[0].content.parts[0].text;
+                    const jsonMatch = raw.match(/\[.*\]/s);
+                    const expls = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+                    const updated = game.questions.map((q, i) => ({ ...q, explanation: expls[i]?.explanation || "Sem comentário." }));
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { questions: updated, status: 'report' });
-                } catch (e) { alert("Não foi possível gerar a correção detalhada."); }
+                } catch (e) { alert("Erro ao gerar comentários."); }
                 finally { setIsGeneratingReport(false); }
             };
 
@@ -316,42 +332,36 @@
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                     <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Disciplina</label>
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">Disciplina</label>
                                         <input type="text" value={discipline} onChange={(e)=>setDiscipline(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Biologia" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Geral</label>
-                                        <input type="text" value={generalContent} onChange={(e)=>setGeneralContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Citologia" />
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">Geral</label>
+                                        <input type="text" value={generalContent} onChange={(e)=>setGeneralContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Célula" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Específico</label>
-                                        <input type="text" value={specificContent} onChange={(e)=>setSpecificContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Mitocôndrias" />
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tight">Específico</label>
+                                        <input type="text" value={specificContent} onChange={(e)=>setSpecificContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: DNA" />
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Questões</label>
-                                        <select value={numQuestions} onChange={(e)=>setNumQuestions(Number(e.target.value))} className="w-full p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
-                                            <option value={3}>3 Questões</option>
-                                            <option value={5}>5 Questões</option>
-                                            <option value={10}>10 Questões</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Tempo</label>
-                                        <select value={timePerQuestion} onChange={(e)=>setTimePerQuestion(Number(e.target.value))} className="w-full p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
-                                            <option value={20}>20 seg</option>
-                                            <option value={60}>1 min</option>
-                                            <option value={300}>5 min</option>
-                                        </select>
-                                    </div>
+                                    <select value={numQuestions} onChange={(e)=>setNumQuestions(Number(e.target.value))} className="p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
+                                        <option value={3}>3 Questões</option>
+                                        <option value={5}>5 Questões</option>
+                                        <option value={10}>10 Questões</option>
+                                    </select>
+                                    <select value={timePerQuestion} onChange={(e)=>setTimePerQuestion(Number(e.target.value))} className="p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
+                                        <option value={20}>20 seg</option>
+                                        <option value={60}>1 min</option>
+                                        <option value={300}>5 min</option>
+                                    </select>
                                 </div>
 
-                                {errorMsg && <p className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-lg border border-red-100">{errorMsg}</p>}
+                                {errorMsg && <p className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-lg border border-red-100 animate-pulse">{errorMsg}</p>}
                                 
                                 <button onClick={generateQuestions} disabled={isGenerating || keyStatus!=='valid'} className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-black text-xl shadow-xl transition-all disabled:bg-gray-200 uppercase tracking-tighter italic">
-                                    {isGenerating ? 'A gerar questões...' : 'Abrir Sala de Aula'}
+                                    {isGenerating ? 'A gerar questões...' : 'Abrir Sala'}
                                 </button>
                             </div>
                         </div>
@@ -437,9 +447,8 @@
                                     <span className="text-3xl font-black text-purple-600">{p.score}</span>
                                 </div>
                             ))}
-                            {sorted.length === 0 && <p className="p-10 text-center text-gray-300 font-bold uppercase italic tracking-widest">Nenhum ponto marcado</p>}
                         </div>
-                        <button onClick={nextQuestion} className="mt-12 bg-blue-500 px-16 py-5 rounded-[2rem] font-black text-2xl shadow-xl">PRÓXIMA QUESTÃO</button>
+                        <button onClick={nextQuestion} className="mt-12 bg-blue-500 px-16 py-5 rounded-[2rem] font-black text-2xl shadow-xl">PRÓXIMA</button>
                     </div>
                 );
             }
@@ -450,26 +459,23 @@
                     <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center p-8 text-white">
                         <Trophy className="w-28 h-28 text-yellow-400 mb-6 drop-shadow-2xl animate-bounce" />
                         <h1 className="text-7xl font-black mb-16 tracking-tighter italic uppercase">Pódio</h1>
-                        <div className="flex items-end gap-4 h-80 w-full max-w-2xl mb-16">
-                            {sorted[1] && <div className="flex-1 bg-blue-500 h-40 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-blue-400">
+                        <div className="flex items-end gap-4 h-80 w-full max-w-2xl mb-16 text-gray-800">
+                            {sorted[1] && <div className="flex-1 bg-blue-500 h-40 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-blue-400 text-white">
                                 <span className="text-5xl opacity-30 mb-2">2</span>
                                 <span className="text-xl truncate px-2 font-black">{sorted[1].nickname}</span>
-                                <span className="text-xs opacity-50">{sorted[1].score} pts</span>
                             </div>}
-                            {sorted[0] && <div className="flex-1 bg-yellow-500 h-64 rounded-t-3xl flex flex-col items-center pt-4 font-black shadow-2xl border-t-8 border-yellow-300">
+                            {sorted[0] && <div className="flex-1 bg-yellow-500 h-64 rounded-t-3xl flex flex-col items-center pt-4 font-black shadow-2xl border-t-8 border-yellow-300 text-white">
                                 <span className="text-6xl opacity-40 mb-2 italic">1</span>
                                 <span className="text-2xl truncate px-2">{sorted[0].nickname}</span>
-                                <span className="text-sm opacity-60 font-black">{sorted[0].score} pts</span>
                             </div>}
-                            {sorted[2] && <div className="flex-1 bg-green-500 h-32 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-green-400">
+                            {sorted[2] && <div className="flex-1 bg-green-500 h-32 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-green-400 text-white">
                                 <span className="text-4xl opacity-30 mb-2">3</span>
                                 <span className="text-lg truncate px-2 font-black">{sorted[2].nickname}</span>
-                                <span className="text-xs opacity-50">{sorted[2].score} pts</span>
                             </div>}
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-6">
+                        <div className="flex flex-col sm:flex-row gap-6 text-white">
                             <button onClick={generateExplanations} disabled={isGeneratingReport} className="bg-blue-600 hover:bg-blue-500 px-12 py-5 rounded-[2rem] font-black text-xl flex items-center gap-3 shadow-2xl transition-all disabled:opacity-30">
-                                {isGeneratingReport ? <Loader2 className="animate-spin"/> : <BookOpen/>} GERAR CORREÇÃO COM IA
+                                {isGeneratingReport ? <Loader2 className="animate-spin"/> : <BookOpen/>} CORREÇÃO IA
                             </button>
                             <button onClick={onExit} className="bg-white/10 px-10 py-5 rounded-[2rem] font-bold border border-white/5">VOLTAR</button>
                         </div>
@@ -479,28 +485,25 @@
 
             if (game?.status === 'report') {
                 return (
-                    <div className="min-h-screen bg-gray-50 p-6">
-                        <div className="max-w-4xl mx-auto">
-                            <div className="flex justify-between items-center mb-10 bg-white p-8 rounded-[2.5rem] shadow-sm border-b-4 border-gray-100">
-                                <div>
-                                    <h1 className="text-4xl font-black text-purple-800 flex items-center gap-3 tracking-tighter italic uppercase"><BookOpen className="w-10 h-10"/> Relatório</h1>
-                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest ml-1">{discipline} • {generalContent}</p>
-                                </div>
-                                <button onClick={onExit} className="bg-red-500 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-tight text-sm shadow-lg">Finalizar</button>
+                    <div className="min-h-screen bg-gray-50 p-6 overflow-y-auto">
+                        <div className="max-w-4xl mx-auto pb-20">
+                            <div className="flex justify-between items-center mb-10 bg-white p-8 rounded-[2.5rem] shadow-sm">
+                                <h1 className="text-4xl font-black text-purple-800 italic uppercase"><BookOpen className="inline w-10 h-10 mr-2"/> Relatório</h1>
+                                <button onClick={onExit} className="bg-red-500 text-white px-8 py-3 rounded-2xl font-black">Sair</button>
                             </div>
                             <div className="space-y-10">
                                 {game.questions.map((q, i) => (
                                     <div key={i} className="bg-white p-10 rounded-[3rem] shadow-md border-l-[16px] border-purple-500">
-                                        <p className="text-2xl font-black mb-8 text-gray-800 leading-tight italic tracking-tighter">{i+1}. {q.question}</p>
+                                        <p className="text-2xl font-black mb-8 text-gray-800 leading-tight italic">{i+1}. {q.question}</p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">
                                             {q.options.map((opt, oi) => (
-                                                <div key={oi} className={`p-5 rounded-2xl border-2 transition-all ${oi===q.correctIndex ? 'bg-green-50 border-green-500 font-black text-green-800' : 'border-gray-50 text-gray-300 italic'}`}>
-                                                    <span className="mr-2 opacity-30">{String.fromCharCode(65 + oi)}:</span> {opt}
+                                                <div key={oi} className={`p-5 rounded-2xl border-2 ${oi===q.correctIndex ? 'bg-green-50 border-green-500 font-black text-green-800' : 'border-gray-50 text-gray-300 italic'}`}>
+                                                    {opt}
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="bg-purple-50 p-8 rounded-[2rem] text-lg leading-relaxed text-purple-900 border border-purple-100 shadow-inner relative overflow-hidden">
-                                            <div className="flex items-center gap-2 font-black text-[10px] uppercase mb-4 opacity-40 tracking-widest"><GraduationCap className="w-5 h-5"/> Resolução Comentada</div>
+                                        <div className="bg-purple-50 p-8 rounded-[2rem] text-lg leading-relaxed text-purple-900 border border-purple-100">
+                                            <div className="flex items-center gap-2 font-black text-[10px] uppercase mb-4 opacity-40 tracking-widest"><GraduationCap className="w-5 h-5"/> Resolução</div>
                                             {q.explanation}
                                         </div>
                                     </div>
@@ -533,10 +536,9 @@
                 e.preventDefault();
                 if (!pin || !nickname) return;
                 try {
-                    // Verifica se o jogo existe antes de entrar
                     const gameSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin));
                     if (!gameSnap.exists()) {
-                        setErrorMsg("Este PIN não existe ou a sala foi encerrada.");
+                        setErrorMsg("Este PIN não existe.");
                         return;
                     }
 
@@ -547,7 +549,7 @@
                     setPlayerDocId(id);
                     setGame({ pin });
                 } catch (e) { 
-                    setErrorMsg("Erro ao ligar ao servidor. Verifique a rede."); 
+                    setErrorMsg("Erro ao ligar ao servidor."); 
                 }
             };
 
@@ -555,7 +557,6 @@
                 if (!game?.pin || !playerDocId) return;
                 const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
                     if (snap.exists()) setGame(snap.data());
-                    else setErrorMsg("A sala de jogo foi removida.");
                 });
                 const unsubPlayer = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), (snap) => {
                     if (snap.exists()) {
@@ -573,12 +574,10 @@
                 setHasAnswered(true);
                 const q = game.questions[game.currentQuestionIndex];
                 const correct = idx === q.correctIndex;
-                const basePoints = 500;
-                const timeRatio = 1 - (Date.now() - (game.endTime - game.timePerQuestion*1000))/(game.timePerQuestion*1000);
-                const bonus = correct ? Math.round(500 * Math.max(0, timeRatio)) : 0;
+                const bonus = correct ? Math.round(500 * (1 - (Date.now() - (game.endTime - game.timePerQuestion*1000))/(game.timePerQuestion*1000))) : 0;
                 setAnswerResult(correct ? 'correct' : 'incorrect');
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), {
-                    score: myScore + (correct ? (basePoints + bonus) : 0),
+                    score: myScore + (correct ? (500 + Math.max(0, bonus)) : 0),
                     [`answers.${game.currentQuestionIndex}`]: { optionIndex: idx, correct }
                 });
             };
@@ -586,23 +585,23 @@
             if (!game?.status) {
                 return (
                     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-                        <form onSubmit={join} className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm border-b-8 border-gray-100">
-                            <h2 className="text-4xl font-black mb-10 text-center text-gray-800 italic tracking-tighter">Entrar</h2>
+                        <form onSubmit={join} className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm">
+                            <h2 className="text-3xl font-black mb-8 text-center text-gray-800 italic">Entrar</h2>
                             <div className="space-y-4">
-                                <input type="text" placeholder="PIN DO JOGO" value={pin} onChange={(e)=>setPin(e.target.value)} className="w-full text-center text-5xl font-black p-6 border-4 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none transition-all placeholder:opacity-20 uppercase tracking-tighter" maxLength="6" />
-                                <input type="text" placeholder="O TEU APELIDO" value={nickname} onChange={(e)=>setNickname(e.target.value)} className="w-full text-center font-black p-4 border-2 border-gray-100 rounded-2xl outline-none focus:border-purple-400 placeholder:opacity-30 uppercase text-lg" maxLength="12" />
+                                <input type="text" placeholder="PIN" value={pin} onChange={(e)=>setPin(e.target.value)} className="w-full text-center text-5xl font-black p-6 border-4 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none" maxLength="6" />
+                                <input type="text" placeholder="APELIDO" value={nickname} onChange={(e)=>setNickname(e.target.value)} className="w-full text-center font-black p-4 border-2 border-gray-100 rounded-2xl outline-none" maxLength="12" />
                             </div>
-                            {errorMsg && <p className="text-red-500 text-xs text-center mt-6 font-bold uppercase tracking-tight italic">{errorMsg}</p>}
-                            <button className="w-full mt-10 bg-blue-600 text-white py-6 rounded-[2rem] font-black text-2xl shadow-[0_8px_0_rgb(30,64,175)] hover:bg-blue-700 active:translate-y-2 active:shadow-none transition-all uppercase tracking-tighter italic">Jogar!</button>
+                            {errorMsg && <p className="text-red-500 text-xs text-center mt-6 font-bold uppercase italic">{errorMsg}</p>}
+                            <button className="w-full mt-10 bg-blue-600 text-white py-6 rounded-[2rem] font-black text-2xl shadow-xl uppercase tracking-tighter">Jogar!</button>
                         </form>
                     </div>
                 );
             }
 
-            if (game.status === 'lobby') return <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-8 text-white"><h1 className="text-6xl font-black mb-4 animate-bounce uppercase tracking-tighter italic">Estás dentro!</h1><p className="text-2xl font-bold opacity-70 italic tracking-tight">O jogo começa em breve...</p></div>;
+            if (game.status === 'lobby') return <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-8 text-white"><h1 className="text-6xl font-black mb-4 animate-bounce italic">Estás dentro!</h1></div>;
 
             if (game.status === 'question') {
-                if (hasAnswered) return <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center text-white"><Loader2 className="animate-spin w-20 h-20 opacity-20 mb-6" /><p className="font-black text-4xl uppercase italic opacity-40 animate-pulse">Enviado!</p></div>;
+                if (hasAnswered) return <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center text-white"><p className="font-black text-4xl uppercase italic opacity-40 animate-pulse">Enviado!</p></div>;
                 return (
                     <div className="min-h-screen grid grid-cols-2 grid-rows-2 gap-3 p-3 bg-gray-200">
                         {[0,1,2,3].map(i => (
@@ -614,33 +613,31 @@
                 );
             }
 
-            if (game.status === 'leaderboard') return <div className={`min-h-screen flex flex-col items-center justify-center text-white transition-colors duration-500 ${answerResult==='correct'?'bg-green-500':'bg-red-500'}`}>
-                <h1 className="text-[10rem] font-black leading-none mb-6 animate-pulse tracking-tighter italic">{answerResult==='correct'?'SIM!':'OH!'}</h1>
-                <p className="text-3xl font-black opacity-80 uppercase tracking-widest italic">{myScore} pts</p>
+            if (game.status === 'leaderboard') return <div className={`min-h-screen flex flex-col items-center justify-center text-white ${answerResult==='correct'?'bg-green-500':'bg-red-500'}`}>
+                <h1 className="text-[10rem] font-black mb-6 animate-pulse italic">{answerResult==='correct'?'SIM!':'OH!'}</h1>
             </div>;
 
-            if (game.status === 'podium') return <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white p-8"><h1 className="text-5xl font-black mb-10 uppercase tracking-tighter italic opacity-50">Fim de Jogo</h1><div className="bg-white/10 p-12 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-md text-center"><p className="font-black text-purple-300 uppercase text-xs mb-4 tracking-widest">Total Final</p><p className="text-8xl font-black text-white tracking-tighter">{myScore}</p></div><p className="mt-12 animate-pulse text-purple-300 font-bold italic tracking-tight">Aguardando a correção do professor...</p></div>;
+            if (game.status === 'podium') return <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white p-8"><h1 className="text-5xl font-black mb-10 uppercase italic opacity-50 text-center leading-none">Fim de Jogo</h1><div className="bg-white/10 p-12 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-md text-center"><p className="text-8xl font-black text-white tracking-tighter">{myScore}</p></div></div>;
 
             if (game.status === 'report') {
                 return (
                     <div className="min-h-screen bg-gray-100 p-6 overflow-y-auto">
-                        <div className="max-w-xl mx-auto">
-                            <h1 className="text-4xl font-black mb-10 text-purple-900 italic tracking-tighter uppercase">Teu Desempenho</h1>
+                        <div className="max-w-xl mx-auto pb-20">
+                            <h1 className="text-3xl font-black mb-8 text-purple-900 italic uppercase">Correção</h1>
                             <div className="space-y-6">
                                 {game.questions.map((q, i) => (
                                     <div key={i} className={`bg-white p-8 rounded-[2.5rem] shadow-lg border-2 ${myAnswers[i]?.correct ? 'border-green-100' : 'border-red-100'}`}>
                                         <div className="flex justify-between items-start gap-4 mb-6">
                                             <p className="font-black text-xl leading-tight tracking-tight italic">{i+1}. {q.question}</p>
-                                            <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl ${myAnswers[i]?.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white shadow-red-200 shadow-lg'}`}>{myAnswers[i]?.correct ? '✓' : '✗'}</div>
+                                            <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl ${myAnswers[i]?.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white shadow-lg'}`}>{myAnswers[i]?.correct ? '✓' : '✗'}</div>
                                         </div>
-                                        <div className="bg-purple-50 p-6 rounded-2xl text-sm leading-relaxed text-gray-700 border border-purple-100 italic shadow-inner">
-                                            <div className="font-black text-[9px] uppercase opacity-40 mb-2">Resolução</div>
+                                        <div className="bg-purple-50 p-6 rounded-2xl text-sm leading-relaxed text-gray-700 border border-purple-100 italic">
                                             {q.explanation}
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                            <button onClick={onExit} className="w-full mt-10 bg-gray-900 text-white py-6 rounded-[2rem] font-black text-2xl shadow-2xl uppercase tracking-tighter italic">Sair do Jogo</button>
+                            <button onClick={onExit} className="w-full mt-10 bg-gray-900 text-white py-6 rounded-[2rem] font-black text-2xl">Sair</button>
                         </div>
                     </div>
                 );
