@@ -37,19 +37,23 @@
         import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
         import { Triangle, Square, Circle, Hexagon, Trophy, Users, Play, Loader2, Key, CheckCircle2, XCircle, Beaker, BookOpen, GraduationCap, Settings } from 'lucide-react';
 
-        // --- CONFIGURAÇÃO FIREBASE ---
+        // --- CONFIGURAÇÃO FIREBASE FINAL (Baseada nas suas fotos) ---
+        const myFirebaseConfig = {
+            apiKey: "AIzaSyCQg38W6tun8YK9QALtnL1AAkUlV5q-dVs",
+            authDomain: "superando-se.firebaseapp.com",
+            projectId: "Superando", // Corrigido para corresponder à sua imagem image_88b387.png
+            storageBucket: "superando-se.firebasestorage.app",
+            messagingSenderId: "635704160880",
+            appId: "1:635704160880:web:bf03fbddcabdf527a63ab5",
+            measurementId: "G-8ZXRL0SVRE"
+        };
+
         let app, auth, db, appId;
         try {
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-                apiKey: "AIzaSyCQg38W6tun8YK9QALtnL1AAkUlV5q-dVs",
-                authDomain: "superando-se.firebaseapp.com",
-                projectId: "superando-se",
-                storageBucket: "superando-se.firebasestorage.app",
-                messagingSenderId: "635704160880",
-                appId: "1:635704160880:web:bf03fbddcabdf527a63ab5",
-                measurementId: "G-8ZXRL0SVRE"
-            };
-            app = initializeApp(firebaseConfig);
+            // Se estiver no Vercel ou produção, usa myFirebaseConfig
+            const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : myFirebaseConfig;
+            
+            app = initializeApp(finalConfig);
             auth = getAuth(app);
             db = getFirestore(app);
             appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-kahoot-app';
@@ -57,804 +61,388 @@
             console.error("Erro ao inicializar Firebase:", error);
         }
 
-        // Constantes de Jogo
         const SHAPE_COLORS = ['bg-red-500', 'bg-blue-500', 'bg-yellow-500', 'bg-green-500'];
         const SHAPE_ICONS = [Triangle, Hexagon, Circle, Square];
 
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home'); 
+            const [authError, setAuthError] = useState('');
             
-            // Auto-rota para aluno se tiver PIN na URL (via QR Code)
             useEffect(() => {
                 const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.has('pin')) {
-                setView('student');
-                }
+                if (urlParams.has('pin')) setView('student');
             }, []);
 
-            // Auth Inicial
             useEffect(() => {
                 if (!auth) return;
                 const initAuth = async () => {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (err) {
+                        console.error("Erro Autenticação:", err);
+                        if (err.code === 'auth/operation-not-allowed') {
+                            setAuthError("Ative o 'Login Anónimo' no Firebase Console!");
+                        } else {
+                            setAuthError("Erro de ligação: " + err.message);
+                        }
                     }
-                } catch (err) {
-                    console.error("Erro de Autenticação:", err);
-                }
                 };
                 initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setUser);
                 return () => unsubscribe();
             }, []);
 
+            if (authError) {
+                return (
+                    <div className="min-h-screen bg-red-900 flex flex-col items-center justify-center text-white p-6 text-center">
+                        <XCircle className="w-20 h-20 mb-6" />
+                        <h1 className="text-2xl font-bold mb-4">Erro de Configuração</h1>
+                        <p className="bg-red-800 p-4 rounded-lg">{authError}</p>
+                    </div>
+                );
+            }
+
             if (!user) {
                 return (
-                <div className="min-h-screen bg-purple-900 flex items-center justify-center text-white">
-                    <Loader2 className="w-12 h-12 animate-spin mb-4" />
-                </div>
+                    <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white">
+                        <Loader2 className="w-12 h-12 animate-spin mb-4" />
+                        <p className="animate-pulse">A ligar ao Superando-se...</p>
+                    </div>
                 );
             }
 
             return (
                 <div className="min-h-screen">
-                {view === 'home' && <HomeView setView={setView} />}
-                {view === 'host' && <HostView user={user} onExit={() => setView('home')} />}
-                {view === 'student' && <StudentView user={user} onExit={() => setView('home')} />}
+                    {view === 'home' && <HomeView setView={setView} />}
+                    {view === 'host' && <HostView user={user} onExit={() => setView('home')} />}
+                    {view === 'student' && <StudentView user={user} onExit={() => setView('home')} />}
                 </div>
             );
         }
 
-        // ==========================================
-        // VISÃO INICIAL (HOME)
-        // ==========================================
         function HomeView({ setView }) {
             return (
                 <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-                    <div className="flex justify-center mb-4">
-                    <GraduationCap className="w-16 h-16 text-purple-600" />
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+                        <div className="flex justify-center mb-4">
+                            <GraduationCap className="w-16 h-16 text-purple-600" />
+                        </div>
+                        <h1 className="text-4xl font-extrabold text-gray-800 mb-1 tracking-tight">Superando-se</h1>
+                        <p className="text-sm text-gray-500 font-medium mb-8">uma proposta do professor Lucas Sebastião Barbosa Silva</p>
+                        
+                        <div className="space-y-4">
+                            <button onClick={() => setView('student')} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(37,99,235)] active:translate-y-1 active:shadow-none transition-all text-xl">
+                                Entrar como Aluno
+                            </button>
+                            <button onClick={() => setView('host')} className="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(216,180,254)] active:translate-y-1 active:shadow-none transition-all text-lg">
+                                Sou Professor (Criar Sala)
+                            </button>
+                        </div>
                     </div>
-                    <h1 className="text-4xl font-extrabold text-gray-800 mb-1 tracking-tight">Superando-se</h1>
-                    <p className="text-sm text-gray-500 font-medium mb-8">uma proposta do professor Lucas Sebastião Barbosa Silva</p>
-                    
-                    <div className="space-y-4">
-                    <button 
-                        onClick={() => setView('student')}
-                        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(37,99,235)] active:shadow-[0_0px_0_rgb(37,99,235)] active:translate-y-1 transition-all text-xl"
-                    >
-                        Entrar como Aluno
-                    </button>
-                    
-                    <button 
-                        onClick={() => setView('host')}
-                        className="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(216,180,254)] active:shadow-[0_0px_0_rgb(216,180,254)] active:translate-y-1 transition-all text-lg"
-                    >
-                        Sou Professor (Criar Sala)
-                    </button>
-                    </div>
-                </div>
                 </div>
             );
         }
 
-        // ==========================================
-        // VISÃO DO PROFESSOR (HOST)
-        // ==========================================
         function HostView({ user, onExit }) {
             const [step, setStep] = useState('setup');
             const [apiKey, setApiKey] = useState('');
             const [keyStatus, setKeyStatus] = useState('idle');
             const [activeModel, setActiveModel] = useState(null);
-            
             const [discipline, setDiscipline] = useState('');
             const [generalContent, setGeneralContent] = useState('');
             const [specificContent, setSpecificContent] = useState('');
-            
             const [isGenerating, setIsGenerating] = useState(false);
             const [isGeneratingReport, setIsGeneratingReport] = useState(false);
             const [errorMsg, setErrorMsg] = useState('');
-            
             const [timePerQuestion, setTimePerQuestion] = useState(20);
             const [examModel, setExamModel] = useState('ENEM');
             const [difficultyLevel, setDifficultyLevel] = useState('Ensino Médio');
             const [numQuestions, setNumQuestions] = useState(5);
-
             const [game, setGame] = useState(null);
             const [players, setPlayers] = useState([]);
             const [timeRemaining, setTimeRemaining] = useState(0);
 
             const testApiKey = async () => {
-                if (!apiKey.trim()) {
-                setErrorMsg("Insira uma chave de API válida.");
-                return;
-                }
+                if (!apiKey.trim()) return setErrorMsg("Insira a chave Gemini.");
                 setKeyStatus('testing');
                 setErrorMsg('');
-                
-                const modelsToTest = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'];
-                let workingModel = null;
-
-                for (const model of modelsToTest) {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}?key=${apiKey.trim()}`);
-                    if (response.ok) {
-                    workingModel = model;
-                    break;
-                    }
-                } catch (e) {
-                    console.warn(`Falha ao testar ${model}`, e);
+                const models = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+                let working = null;
+                for (const m of models) {
+                    try {
+                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}?key=${apiKey.trim()}`);
+                        if (res.ok) { working = m; break; }
+                    } catch (e) {}
                 }
-                }
-
-                if (workingModel) {
-                setActiveModel(workingModel);
-                setKeyStatus('valid');
-                } else {
-                setKeyStatus('invalid');
-                setErrorMsg("Chave inválida ou nenhum modelo compatível encontrado.");
-                }
+                if (working) { setActiveModel(working); setKeyStatus('valid'); }
+                else { setKeyStatus('invalid'); setErrorMsg("Chave Gemini inválida."); }
             };
 
             const generateQuestions = async () => {
-                if (!activeModel || keyStatus !== 'valid') {
-                setErrorMsg("Teste uma chave válida primeiro.");
-                return;
-                }
-                if (!discipline || !generalContent || !specificContent) {
-                setErrorMsg("Preencha a disciplina, conteúdo geral e específico.");
-                return;
-                }
-
+                if (!activeModel || keyStatus !== 'valid') return setErrorMsg("Valide a chave primeiro.");
+                if (!discipline || !generalContent || !specificContent) return setErrorMsg("Preencha os campos de assunto.");
+                
                 setIsGenerating(true);
                 setErrorMsg('');
 
-                const prompt = `Atue como um professor especialista na disciplina de "${discipline}". Gere ${numQuestions} questões de múltipla escolha focadas no nível "${difficultyLevel}", no estilo das provas do/da "${examModel}".
-                O conteúdo geral da aula é "${generalContent}" e o conteúdo específico a ser avaliado é "${specificContent}".
-                
-                MUITO IMPORTANTE: 
-                - Baseie-se EXCLUSIVAMENTE em dados confiáveis.
-                - Retorne ESTRITAMENTE um array JSON.
-                - Nenhuma formatação markdown, apenas o JSON.
-                - Formato exigido:
-                [
-                  {
-                    "question": "Texto da pergunta",
-                    "options": ["Opção A", "Opção B", "Opção C", "Opção D"],
-                    "correctIndex": 0
-                  }
-                ]`;
+                const prompt = `Atue como professor de "${discipline}". Gere ${numQuestions} questões de múltipla escolha (${difficultyLevel}, estilo ${examModel}). 
+                Assunto: "${generalContent}" - "${specificContent}". 
+                Retorne apenas um array JSON: [{"question": "...", "options": ["A","B","C","D"], "correctIndex": 0}].`;
 
                 try {
-                    // Controller para Timeout da IA (25 segundos máximo)
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 25000);
-
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        signal: controller.signal,
                         body: JSON.stringify({
                             contents: [{ parts: [{ text: prompt }] }],
                             generationConfig: { responseMimeType: "application/json" }
                         })
                     });
 
-                    clearTimeout(timeoutId);
+                    if (!res.ok) throw new Error("Erro na IA.");
+                    const data = await res.json();
+                    const raw = data.candidates[0].content.parts[0].text;
+                    const json = JSON.parse(raw.replace(/```json/g, '').replace(/```/g, '').trim());
 
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        throw new Error(errData.error?.message || "Erro na requisição da API Gemini.");
-                    }
-                    
-                    const data = await response.json();
-                    
-                    if (!data.candidates || !data.candidates[0].content) {
-                        throw new Error("A IA não retornou o formato esperado. Tente novamente.");
-                    }
-                    
-                    let rawText = data.candidates[0].content.parts[0].text;
-                    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const questionsData = JSON.parse(rawText);
+                    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+                    const gameData = {
+                        pin, hostId: user.uid, status: 'lobby', questions: json, 
+                        currentQuestionIndex: 0, timePerQuestion: Number(timePerQuestion),
+                        createdAt: Date.now(), context: { discipline, generalContent }
+                    };
 
-                    if (!Array.isArray(questionsData) || questionsData.length === 0) {
-                        throw new Error("Formato inválido retornado pela IA.");
-                    }
-
-                    const validQuestions = questionsData.map(q => ({
-                        ...q,
-                        options: q.options && Array.isArray(q.options) ? q.options.slice(0, 4).concat(Array(Math.max(0, 4 - q.options.length)).fill("N/A")) : ["A", "B", "C", "D"],
-                        correctIndex: typeof q.correctIndex === 'number' ? Math.min(Math.max(0, q.correctIndex), 3) : 0
-                    }));
-
-                    await createGameSession(validQuestions);
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin), gameData);
+                    setGame(gameData);
+                    setStep('lobby');
                 } catch (err) {
-                    console.error(err);
-                    if (err.name === 'AbortError') {
-                        setErrorMsg("A Inteligência Artificial demorou demasiado a responder. Tente novamente.");
-                    } else {
-                        setErrorMsg(err.message || "Falha ao gerar questões. Tente novamente.");
-                    }
+                    setErrorMsg("Erro ao criar sala: Verifique se as Regras do Firebase estão como 'true'.");
                 } finally {
                     setIsGenerating(false);
                 }
             };
 
-            const createGameSession = async (questions) => {
-                const pin = Math.floor(100000 + Math.random() * 900000).toString();
-                const gameData = {
-                pin,
-                hostId: user.uid,
-                status: 'lobby',
-                questions,
-                currentQuestionIndex: 0,
-                timePerQuestion: Number(timePerQuestion),
-                createdAt: Date.now(),
-                context: { discipline, generalContent } 
-                };
-
-                try {
-                    // Força um timeout no Firebase de 8 segundos para evitar ecrãs congelados
-                    const writePromise = setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin), gameData);
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout Firebase")), 8000));
-                    
-                    await Promise.race([writePromise, timeoutPromise]);
-                    
-                    setGame(gameData);
-                    setStep('lobby');
-                } catch (err) {
-                    if (err.message === "Timeout Firebase") {
-                        throw new Error("A Base de Dados não respondeu. Verifique se o seu 'projectId' está correto no código (sem erros ortográficos como 'surando-se') e se ativou as Regras como true.");
-                    } else {
-                        throw new Error("Erro ao criar sala na base de dados: " + err.message);
-                    }
-                }
-            };
-
             useEffect(() => {
-                if (!game?.pin || !user) return;
-
-                const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (docSnap) => {
-                if (docSnap.exists()) {
-                    setGame(docSnap.data());
-                }
-                }, (error) => console.error("Erro listener game:", error));
-
-                const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snapshot) => {
-                const allPlayers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                const roomPlayers = allPlayers.filter(p => p.gameId === game.pin);
-                setPlayers(roomPlayers);
-                }, (error) => console.error("Erro listener players:", error));
-
+                if (!game?.pin) return;
+                const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
+                    if (snap.exists()) setGame(snap.data());
+                });
+                const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snap) => {
+                    setPlayers(snap.docs.map(d => d.data()).filter(p => p.gameId === game.pin));
+                });
                 return () => { unsubGame(); unsubPlayers(); };
-            }, [game?.pin, user]);
+            }, [game?.pin]);
 
             useEffect(() => {
                 let interval;
                 if (game?.status === 'question' && game?.endTime) {
-                interval = setInterval(() => {
-                    const left = Math.max(0, Math.ceil((game.endTime - Date.now()) / 1000));
-                    setTimeRemaining(left);
-                    if (left === 0) {
-                    clearInterval(interval);
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { status: 'leaderboard' }).catch(console.error);
-                    }
-                }, 1000);
+                    interval = setInterval(() => {
+                        const left = Math.max(0, Math.ceil((game.endTime - Date.now()) / 1000));
+                        setTimeRemaining(left);
+                        if (left === 0) {
+                            clearInterval(interval);
+                            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { status: 'leaderboard' });
+                        }
+                    }, 1000);
                 }
                 return () => clearInterval(interval);
-            }, [game?.status, game?.endTime, game?.pin]);
+            }, [game?.status, game?.endTime]);
 
             const startGame = () => {
                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
-                status: 'question',
-                endTime: Date.now() + (game.timePerQuestion * 1000)
+                    status: 'question', endTime: Date.now() + (game.timePerQuestion * 1000) 
                 });
-                setStep('game');
             };
 
             const nextQuestion = () => {
                 const nextIdx = game.currentQuestionIndex + 1;
                 if (nextIdx >= game.questions.length) {
-                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { status: 'podium' });
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { status: 'podium' });
                 } else {
-                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
-                    status: 'question',
-                    currentQuestionIndex: nextIdx,
-                    endTime: Date.now() + (game.timePerQuestion * 1000)
-                });
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
+                        status: 'question', currentQuestionIndex: nextIdx, endTime: Date.now() + (game.timePerQuestion * 1000)
+                    });
                 }
             };
 
-            // FASE 2: Geração das Explicações
             const generateExplanations = async () => {
                 setIsGeneratingReport(true);
-
-                const prompt = `Atue como um professor especialista na disciplina de "${game.context?.discipline || 'Conhecimentos Gerais'}".
-                Abaixo estão ${game.questions.length} questões sobre "${game.context?.generalContent || 'vários temas'}" que foram aplicadas aos alunos.
-                
-                A sua tarefa é analisar cada uma e gerar um comentário explicativo.
-                Forneça uma explicação passo a passo, objetiva, clara e didática justificando o porquê da resposta correta estar certa e por que as outras opções estão incorretas.
-
-                QUESTÕES A ANALISAR:
-                ${JSON.stringify(game.questions.map(q => ({ question: q.question, options: q.options, correctIndex: q.correctIndex })))}
-
-                Regras:
-                1. Retorne ESTRITAMENTE um array JSON com os comentários na mesma ordem das questões passadas.`;
-
+                const prompt = `Gere explicações didáticas para estas questões: ${JSON.stringify(game.questions)}. Retorne array JSON: [{"explanation": "..."}].`;
                 try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel || 'gemini-2.5-flash'}:generateContent?key=${apiKey.trim()}`, {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { 
-                            responseMimeType: "application/json",
-                            responseSchema: {
-                                type: "ARRAY",
-                                items: {
-                                    type: "OBJECT",
-                                    properties: { explanation: { type: "STRING" } },
-                                    required: ["explanation"]
-                                }
-                            }
-                        }
-                        })
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
-
-                    if (!response.ok) throw new Error("Erro na API.");
-                    const data = await response.json();
-                    
-                    let rawText = data.candidates[0].content.parts[0].text;
-                    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                    const explanationsData = JSON.parse(rawText);
-
-                    // Junta as explicações geradas com as questões originais
-                    const updatedQuestions = game.questions.map((q, index) => ({
-                        ...q,
-                        explanation: explanationsData[index]?.explanation || "Explicação gerada com falhas ou indisponível no momento."
-                    }));
-
-                    // Atualiza a base de dados e muda o status para 'report'
-                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
-                        questions: updatedQuestions,
-                        status: 'report' 
-                    });
-
-                } catch (err) {
-                    console.error(err);
-                    alert("Ocorreu um erro ao gerar os comentários com a IA. Tente novamente.");
-                } finally {
-                    setIsGeneratingReport(false);
-                }
+                    const data = await res.json();
+                    const expls = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim());
+                    const updated = game.questions.map((q, i) => ({ ...q, explanation: expls[i]?.explanation || "Sem comentário." }));
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { questions: updated, status: 'report' });
+                } catch (e) { alert("Erro na correção."); }
+                finally { setIsGeneratingReport(false); }
             };
 
             if (step === 'setup') {
                 return (
-                <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <Settings className="w-6 h-6 text-purple-600" /> Configuração da Sala
-                        </h2>
-                        <button onClick={onExit} className="text-gray-400 hover:text-red-500"><XCircle className="w-6 h-6" /></button>
-                    </div>
-
-                    <div className="space-y-6">
-                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                        <div className="flex justify-between items-end mb-2">
-                            <label className="block text-sm font-semibold text-purple-900">Chave de API da Google Gemini</label>
-                            <a 
-                            href="https://aistudio.google.com/app/apikey" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:text-blue-800 underline font-medium"
-                            >
-                            Obter chave gratuita
-                            </a>
-                        </div>
-                        <div className="flex gap-2">
-                            <input 
-                            type="password" 
-                            value={apiKey} 
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="flex-1 px-4 py-2 border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            />
-                            <button 
-                            onClick={testApiKey}
-                            disabled={keyStatus === 'testing'}
-                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
-                            >
-                            {keyStatus === 'testing' ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Testar'}
-                            </button>
-                        </div>
-                        
-                        {keyStatus === 'valid' && (
-                            <div className="mt-2 text-sm text-green-700 flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" /> Chave Válida! A usar modelo: <span className="font-bold">{activeModel}</span>
-                            </div>
-                        )}
-                        {keyStatus === 'invalid' && (
-                            <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                            <XCircle className="w-4 h-4" /> Falha ao validar a chave.
-                            </div>
-                        )}
-                        </div>
-
-                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                        <BookOpen className="w-5 h-5 text-purple-600" /> Assunto da Aula
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Disciplina</label>
-                        <input 
-                            type="text" 
-                            value={discipline} 
-                            onChange={(e) => setDiscipline(e.target.value)}
-                            placeholder="Ex: História, Física..."
-                            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        </div>
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Conteúdo Geral</label>
-                        <input 
-                            type="text" 
-                            value={generalContent} 
-                            onChange={(e) => setGeneralContent(e.target.value)}
-                            placeholder="Ex: Brasil Colônia, Mecânica..."
-                            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        </div>
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">Conteúdo Específico</label>
-                        <input 
-                            type="text" 
-                            value={specificContent} 
-                            onChange={(e) => setSpecificContent(e.target.value)}
-                            placeholder="Ex: Capitanias, Leis de Newton..."
-                            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        </div>
-                    </div>
-
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                        <Settings className="w-5 h-5 text-purple-600" /> Formato das Questões
-                    </h3>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Quantidade de Questões</label>
-                        <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none">
-                            <option value={3}>3 questões</option>
-                            <option value={5}>5 questões</option>
-                            <option value={10}>10 questões</option>
-                            <option value={15}>15 questões</option>
-                        </select>
-                        </div>
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Nível</label>
-                        <select value={difficultyLevel} onChange={(e) => setDifficultyLevel(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none">
-                            <option value="Ensino Fundamental">Ensino Fundamental</option>
-                            <option value="Ensino Médio">Ensino Médio</option>
-                            <option value="Ensino Superior">Ensino Superior</option>
-                            <option value="Pós-graduação">Pós-graduação</option>
-                        </select>
-                        </div>
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Modelo/Estilo</label>
-                        <select value={examModel} onChange={(e) => setExamModel(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none">
-                            <option value="ENEM">ENEM</option>
-                            <option value="Vestibular Tradicional">Vestibular Tradicional</option>
-                            <option value="SPAECE">SPAECE</option>
-                            <option value="URCA">URCA</option>
-                            <option value="Concurso Público">Concurso Público</option>
-                        </select>
-                        </div>
-                        <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Tempo por Questão</label>
-                        <select value={timePerQuestion} onChange={(e) => setTimePerQuestion(Number(e.target.value))} className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none">
-                            <option value={10}>10 segundos</option>
-                            <option value={20}>20 segundos</option>
-                            <option value={30}>30 segundos</option>
-                            <option value={60}>1 minuto</option>
-                            <option value={120}>2 minutos</option>
-                            <option value={180}>3 minutos</option>
-                            <option value={240}>4 minutos</option>
-                            <option value={300}>5 minutos</option>
-                        </select>
-                        </div>
-                    </div>
-                    </div>
-
-                    {errorMsg && <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">{errorMsg}</div>}
-
-                    <button 
-                    onClick={generateQuestions}
-                        disabled={isGenerating || keyStatus !== 'valid'}
-                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${
-                            isGenerating || keyStatus !== 'valid' ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 hover:-translate-y-1'
-                        } flex justify-center items-center gap-2 text-lg`}
-                        >
-                        {isGenerating ? (
-                            <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-2">
-                                    <Loader2 className="w-6 h-6 animate-spin" /> 
-                                    <span>A Gerar Questões...</span>
+                    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
+                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800"><Settings className="text-purple-600"/> Configuração</h2>
+                            <div className="space-y-4">
+                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                    <div className="flex justify-between text-[10px] font-bold text-purple-900 mb-1">
+                                        <span>CHAVE GOOGLE GEMINI</span>
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline">Obter chave</a>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="password" value={apiKey} onChange={(e)=>setApiKey(e.target.value)} placeholder="AIza..." className="flex-1 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-purple-400" />
+                                        <button onClick={testApiKey} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold">{keyStatus==='testing' ? '...' : 'Testar'}</button>
+                                    </div>
+                                    {keyStatus==='valid' && <p className="text-[10px] text-green-600 mt-1 font-bold">✓ Conectado: {activeModel}</p>}
                                 </div>
-                                <span className="text-[11px] mt-1 font-normal opacity-90">(Isto pode demorar até 30 segundos)</span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    <input type="text" placeholder="Disciplina" value={discipline} onChange={(e)=>setDiscipline(e.target.value)} className="p-2 border rounded-lg text-sm" />
+                                    <input type="text" placeholder="Geral" value={generalContent} onChange={(e)=>setGeneralContent(e.target.value)} className="p-2 border rounded-lg text-sm" />
+                                    <input type="text" placeholder="Específico" value={specificContent} onChange={(e)=>setSpecificContent(e.target.value)} className="p-2 border rounded-lg text-sm" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select value={numQuestions} onChange={(e)=>setNumQuestions(Number(e.target.value))} className="p-2 border rounded-lg text-sm"><option value={3}>3 Questões</option><option value={5}>5 Questões</option><option value={10}>10 Questões</option></select>
+                                    <select value={timePerQuestion} onChange={(e)=>setTimePerQuestion(Number(e.target.value))} className="p-2 border rounded-lg text-sm"><option value={20}>20 seg</option><option value={60}>1 min</option><option value={300}>5 min</option></select>
+                                </div>
+                                {errorMsg && <p className="text-red-500 text-xs font-bold">{errorMsg}</p>}
+                                <button onClick={generateQuestions} disabled={isGenerating || keyStatus!=='valid'} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-green-600 disabled:bg-gray-300">
+                                    {isGenerating ? 'A gerar questões...' : 'Criar Sala'}
+                                </button>
                             </div>
-                        ) : 'Criar Sala de Jogo'}
-                        </button>
+                        </div>
                     </div>
-                    </div>
-                </div>
                 );
             }
 
             if (game?.status === 'lobby') {
                 const joinUrl = `${window.location.origin}${window.location.pathname}?pin=${game.pin}`;
-                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
-                
-                const isPreviewEnv = window.location.hostname.includes('usercontent') || window.location.protocol === 'blob:';
-
+                const qr = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
                 return (
-                <div className="min-h-screen bg-purple-700 text-white flex flex-col">
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                    
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 mb-12">
-                        <div>
-                        <h2 className="text-3xl font-medium mb-4">Junte-se ao jogo com o PIN:</h2>
-                        <div className="bg-white text-black text-7xl md:text-8xl font-black py-6 px-12 rounded-2xl shadow-2xl tracking-widest">
-                            {game.pin}
-                        </div>
-                        </div>
-                        
-                        <div className="bg-white p-4 rounded-2xl shadow-2xl flex flex-col items-center relative">
-                        <img src={qrCodeUrl} alt="QR Code para entrar" className={`w-40 h-40 md:w-48 md:h-48 transition-opacity ${isPreviewEnv ? 'opacity-20' : ''}`} />
-                        
-                        {isPreviewEnv && (
-                            <div className="absolute inset-0 flex items-center justify-center p-4 text-center z-10">
-                            <span className="text-[11px] md:text-xs font-bold text-red-600 bg-white/95 p-3 rounded-lg shadow-lg border border-red-200">
-                                ⚠️ QR Code desativado na pré-visualização. Funcionará perfeitamente após publicar.
-                            </span>
+                    <div className="min-h-screen bg-purple-700 text-white flex flex-col items-center justify-center p-8">
+                        <div className="flex flex-col md:flex-row gap-8 items-center bg-white/10 p-12 rounded-3xl border border-white/20 shadow-2xl">
+                            <div className="text-center">
+                                <h2 className="text-2xl mb-2 opacity-80 uppercase tracking-widest font-light">Pin da Sala</h2>
+                                <div className="bg-white text-purple-900 text-8xl font-black py-4 px-10 rounded-2xl shadow-inner">{game.pin}</div>
                             </div>
-                        )}
-                        
-                        <span className="text-black font-bold mt-3 text-sm uppercase tracking-wide">Digitalize para jogar</span>
+                            <div className="bg-white p-4 rounded-xl shadow-2xl flex flex-col items-center">
+                                <img src={qr} className="w-40 h-40" alt="QR Code" />
+                                <span className="text-black text-[10px] font-bold mt-2">DIGITALIZE PARA ENTRAR</span>
+                            </div>
                         </div>
+                        <div className="mt-12 text-center w-full max-w-2xl">
+                            <div className="text-2xl font-bold mb-6 flex items-center justify-center gap-2"><Users/> {players.length} Jogadores</div>
+                            <div className="flex flex-wrap gap-2 justify-center">
+                                {players.map(p => <span key={p.userId} className="bg-white/20 px-4 py-2 rounded-full font-bold">{p.nickname}</span>)}
+                            </div>
+                        </div>
+                        <button onClick={startGame} disabled={players.length===0} className="mt-10 bg-blue-500 px-12 py-5 rounded-2xl font-black text-2xl shadow-xl hover:scale-105 transition-transform disabled:opacity-50">INICIAR</button>
                     </div>
-                    
-                    <div className="flex items-center gap-4 mb-8">
-                        <Users className="w-8 h-8" />
-                        <span className="text-3xl font-bold">{players.length} Jogadores</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-4 justify-center max-w-4xl">
-                        {players.map(p => (
-                        <span key={p.id} className="bg-purple-800 px-6 py-3 rounded-full text-xl font-semibold shadow-inner">
-                            {p.nickname}
-                        </span>
-                        ))}
-                    </div>
-                    </div>
-                    
-                    <div className="bg-purple-900 p-6 flex justify-between items-center">
-                    <button onClick={onExit} className="text-purple-300 hover:text-white font-medium px-4 py-2">Cancelar Sala</button>
-                    <button 
-                        onClick={startGame}
-                        disabled={players.length === 0}
-                        className={`px-8 py-4 rounded-xl font-bold text-xl shadow-lg transition-all flex items-center gap-2 ${
-                        players.length > 0 ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        }`}
-                    >
-                        Iniciar Jogo <Play className="w-6 h-6" />
-                    </button>
-                    </div>
-                </div>
                 );
             }
 
             if (game?.status === 'question') {
-                const currentQ = game.questions[game.currentQuestionIndex];
-                const answersCount = players.filter(p => p.answers && p.answers[game.currentQuestionIndex]).length;
-
+                const q = game.questions[game.currentQuestionIndex];
                 return (
-                <div className="min-h-screen bg-gray-100 flex flex-col">
-                    <div className="bg-white text-center py-8 px-4 shadow-sm">
-                    <h2 className="text-3xl md:text-5xl font-bold text-gray-800">{currentQ.question}</h2>
-                    </div>
-                    
-                    <div className="flex-1 flex items-center justify-center relative">
-                    <div className="absolute left-8 bg-purple-600 text-white w-24 h-24 rounded-full flex items-center justify-center text-4xl font-bold shadow-lg">
-                        {timeRemaining}
-                    </div>
-                    <div className="absolute right-8 text-2xl font-bold text-gray-600 bg-white px-6 py-3 rounded-xl shadow-md flex items-center gap-2">
-                        Respostas: {answersCount} / {players.length}
-                    </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 p-4 h-64 md:h-80">
-                    {currentQ.options.map((opt, idx) => {
-                        const Icon = SHAPE_ICONS[idx];
-                        return (
-                        <div key={idx} className={`${SHAPE_COLORS[idx]} rounded-xl shadow-lg flex items-center p-6 gap-6 relative overflow-hidden`}>
-                            <div className="bg-white/20 p-4 rounded-lg"><Icon className="w-12 h-12 text-white fill-white" /></div>
-                            <span className="text-white text-2xl md:text-3xl font-bold break-words">{opt}</span>
+                    <div className="min-h-screen bg-gray-100 flex flex-col">
+                        <div className="bg-white p-8 text-center shadow-lg"><h2 className="text-3xl md:text-5xl font-black text-gray-800">{q.question}</h2></div>
+                        <div className="flex-1 flex items-center justify-center">
+                            <div className="w-32 h-32 rounded-full border-[10px] border-purple-600 flex items-center justify-center text-4xl font-black text-purple-800 bg-white shadow-xl">{timeRemaining}</div>
                         </div>
-                        );
-                    })}
+                        <div className="grid grid-cols-2 gap-4 p-4 h-72 md:h-80">
+                            {q.options.map((opt, i) => (
+                                <div key={i} className={`${SHAPE_COLORS[i]} rounded-2xl flex items-center p-6 gap-4 text-white shadow-xl`}>
+                                    {React.createElement(SHAPE_ICONS[i], { className: "w-10 h-10 fill-white shrink-0" })}
+                                    <span className="text-xl md:text-2xl font-bold">{opt}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
                 );
             }
 
             if (game?.status === 'leaderboard') {
-                const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5);
-                const currentQ = game.questions[game.currentQuestionIndex];
-
+                const sorted = [...players].sort((a,b)=> (b.score||0)-(a.score||0)).slice(0,5);
+                const q = game.questions[game.currentQuestionIndex];
                 return (
-                <div className="min-h-screen bg-purple-700 p-8 flex flex-col items-center">
-                    <h2 className="text-4xl font-bold text-white mb-8">Placar Parcial</h2>
-                    
-                    <div className="bg-white rounded-xl p-6 mb-8 w-full max-w-2xl text-center shadow-lg">
-                    <p className="text-gray-500 text-sm font-bold uppercase tracking-wide mb-2">Resposta Correta</p>
-                    <div className={`text-2xl font-bold p-4 rounded-lg flex items-center justify-center gap-4 ${SHAPE_COLORS[currentQ.correctIndex]} text-white`}>
-                        {React.createElement(SHAPE_ICONS[currentQ.correctIndex], { className: "w-8 h-8 fill-white" })}
-                        {currentQ.options[currentQ.correctIndex]}
-                    </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl">
-                    {sortedPlayers.map((p, i) => (
-                        <div key={p.id} className={`flex justify-between p-6 border-b border-gray-100 ${i === 0 ? 'bg-yellow-50' : ''}`}>
-                        <div className="flex items-center gap-4 text-2xl font-bold text-gray-800">
-                            <span className="text-gray-400 w-8">{i + 1}.</span> {p.nickname}
+                    <div className="min-h-screen bg-purple-700 flex flex-col items-center p-8 text-white">
+                        <div className="bg-white text-gray-800 p-6 rounded-2xl w-full max-w-xl mb-8 text-center shadow-2xl border-b-8 border-gray-200">
+                            <p className="text-xs font-black text-gray-400 uppercase mb-2">Resposta Correta</p>
+                            <div className={`${SHAPE_COLORS[q.correctIndex]} p-4 rounded-xl text-white font-black text-2xl`}>{q.options[q.correctIndex]}</div>
                         </div>
-                        <div className="text-2xl font-bold text-purple-600">{p.score || 0} pts</div>
+                        <h2 className="text-4xl font-black mb-6 tracking-tighter italic">LÍDERES</h2>
+                        <div className="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl">
+                            {sorted.map((p, i) => (
+                                <div key={p.userId} className="flex justify-between p-5 border-b text-gray-800 font-bold text-xl hover:bg-gray-50 transition-colors">
+                                    <span>{i+1}. {p.nickname}</span>
+                                    <span className="text-purple-600 font-black">{p.score}</span>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                    {sortedPlayers.length === 0 && <div className="p-8 text-center text-gray-500">Nenhum jogador pontuou ainda.</div>}
+                        <button onClick={nextQuestion} className="mt-8 bg-blue-500 px-12 py-4 rounded-xl font-black text-xl shadow-xl">PRÓXIMA</button>
                     </div>
-
-                    <button 
-                    onClick={nextQuestion}
-                    className="mt-8 bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-12 rounded-xl text-xl shadow-lg transition-all"
-                    >
-                    {game.currentQuestionIndex < game.questions.length - 1 ? 'Próxima Pergunta' : 'Ver Pódio Final'}
-                    </button>
-                </div>
                 );
             }
 
             if (game?.status === 'podium') {
-                const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
-                const [first, second, third] = sortedPlayers;
-
+                const sorted = [...players].sort((a,b)=> (b.score||0)-(a.score||0));
                 return (
-                <div className="min-h-screen bg-purple-800 flex flex-col items-center justify-center p-4">
-                    <h1 className="text-5xl font-extrabold text-white mb-16 drop-shadow-lg">Pódio Final</h1>
-                    
-                    <div className="flex items-end justify-center gap-4 w-full max-w-4xl h-64 mb-16">
-                    {second && (
-                        <div className="w-1/3 flex flex-col items-center">
-                        <span className="text-2xl font-bold text-white mb-2">{second.nickname}</span>
-                        <span className="text-lg text-purple-200 mb-2">{second.score || 0} pts</span>
-                        <div className="w-full bg-blue-500 h-40 rounded-t-lg flex justify-center pt-4 shadow-xl">
-                            <span className="text-white text-5xl font-black opacity-50">2</span>
+                    <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center p-8 text-white">
+                        <Trophy className="w-24 h-24 text-yellow-400 mb-6 drop-shadow-lg animate-bounce" />
+                        <h1 className="text-6xl font-black mb-12 tracking-tight">PÓDIO</h1>
+                        <div className="flex items-end gap-3 h-64 w-full max-w-lg mb-12">
+                            {sorted[1] && <div className="flex-1 bg-blue-500 h-32 rounded-t-2xl flex flex-col items-center pt-2 font-bold shadow-lg border-x border-t border-blue-400"><span>2º</span><span className="text-xs truncate px-1">{sorted[1].nickname}</span></div>}
+                            {sorted[0] && <div className="flex-1 bg-yellow-500 h-52 rounded-t-2xl flex flex-col items-center pt-2 font-black shadow-2xl text-xl border-x border-t border-yellow-300"><span>1º</span><span className="text-sm truncate px-1">{sorted[0].nickname}</span></div>}
+                            {sorted[2] && <div className="flex-1 bg-green-500 h-24 rounded-t-2xl flex flex-col items-center pt-2 font-bold shadow-lg border-x border-t border-green-400"><span>3º</span><span className="text-xs truncate px-1">{sorted[2].nickname}</span></div>}
                         </div>
+                        <div className="flex gap-4">
+                            <button onClick={generateExplanations} disabled={isGeneratingReport} className="bg-blue-600 px-8 py-4 rounded-2xl font-black text-lg flex items-center gap-2 shadow-xl">
+                                {isGeneratingReport ? <Loader2 className="animate-spin"/> : <BookOpen/>} GERAR CORREÇÃO
+                            </button>
+                            <button onClick={onExit} className="bg-white/10 px-8 py-4 rounded-2xl font-bold">SAIR</button>
                         </div>
-                    )}
-                    
-                    {first && (
-                        <div className="w-1/3 flex flex-col items-center relative z-10">
-                        <Trophy className="w-16 h-16 text-yellow-400 absolute -top-20 drop-shadow-lg" />
-                        <span className="text-3xl font-bold text-white mb-2">{first.nickname}</span>
-                        <span className="text-xl text-yellow-300 font-bold mb-2">{first.score || 0} pts</span>
-                        <div className="w-full bg-yellow-500 h-56 rounded-t-lg flex justify-center pt-4 shadow-2xl">
-                            <span className="text-white text-6xl font-black opacity-50">1</span>
-                        </div>
-                        </div>
-                    )}
-
-                    {third && (
-                        <div className="w-1/3 flex flex-col items-center">
-                        <span className="text-xl font-bold text-white mb-2">{third.nickname}</span>
-                        <span className="text-md text-purple-200 mb-2">{third.score || 0} pts</span>
-                        <div className="w-full bg-green-500 h-28 rounded-t-lg flex justify-center pt-2 shadow-xl">
-                            <span className="text-white text-4xl font-black opacity-50">3</span>
-                        </div>
-                        </div>
-                    )}
                     </div>
-
-                    <div className="flex flex-col sm:flex-row gap-4">
-                    <button 
-                        onClick={generateExplanations}
-                        disabled={isGeneratingReport}
-                        className={`font-bold py-3 px-8 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 ${
-                            isGeneratingReport ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'
-                        }`}
-                    >
-                        {isGeneratingReport ? (
-                            <><Loader2 className="w-5 h-5 animate-spin" /> A Analisar e Gerar Correção...</>
-                        ) : (
-                            <><BookOpen className="w-5 h-5" /> Gerar Correção com IA</>
-                        )}
-                    </button>
-                    <button 
-                        onClick={onExit}
-                        className="bg-white text-purple-800 font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-gray-100 transition-colors"
-                    >
-                        Sair do Jogo
-                    </button>
-                    </div>
-                </div>
                 );
             }
 
             if (game?.status === 'report') {
                 return (
-                <div className="min-h-screen bg-gray-50 p-4 md:p-8 overflow-y-auto">
-                    <div className="max-w-4xl mx-auto">
-                    <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h1 className="text-2xl md:text-3xl font-bold text-purple-800 flex items-center gap-3">
-                        <BookOpen className="w-8 h-8" /> Relatório da Aula
-                        </h1>
-                        <button onClick={onExit} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                        Encerrar Sala
-                        </button>
-                    </div>
-                    
-                    <div className="space-y-6">
-                        {game.questions.map((q, i) => (
-                        <div key={i} className="bg-white p-6 md:p-8 rounded-2xl shadow-md border-l-4 border-purple-500">
-                            <h3 className="text-xl font-bold text-gray-800 mb-6 flex gap-2">
-                            <span className="text-purple-600 shrink-0">Q{i + 1}.</span> {q.question}
-                            </h3>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                            {q.options.map((opt, optIdx) => (
-                                <div key={optIdx} className={`p-4 rounded-xl border-2 flex items-center gap-3 ${
-                                optIdx === q.correctIndex 
-                                    ? 'bg-green-50 border-green-500 text-green-900 font-semibold' 
-                                    : 'bg-gray-50 border-transparent text-gray-600'
-                                }`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 ${
-                                    optIdx === q.correctIndex ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                                }`}>
-                                    {String.fromCharCode(65 + optIdx)}
-                                </div>
-                                <span className="break-words">{opt}</span>
-                                </div>
-                            ))}
+                    <div className="min-h-screen bg-gray-50 p-6">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                                <h1 className="text-3xl font-black text-purple-800 flex items-center gap-3"><BookOpen className="w-8 h-8"/> RELATÓRIO</h1>
+                                <button onClick={onExit} className="bg-red-500 text-white px-6 py-2 rounded-xl font-bold">FECHAR</button>
                             </div>
-                            
-                            <div className="bg-purple-50 p-6 rounded-xl border border-purple-100">
-                            <h4 className="font-bold text-purple-800 mb-3 flex items-center gap-2 uppercase tracking-wide text-sm">
-                                <GraduationCap className="w-5 h-5"/> Passo a Passo da Resolução
-                            </h4>
-                            <p className="text-gray-700 leading-relaxed text-base md:text-lg whitespace-pre-wrap">{q.explanation}</p>
+                            <div className="space-y-6">
+                                {game.questions.map((q, i) => (
+                                    <div key={i} className="bg-white p-8 rounded-3xl shadow-md border-l-[12px] border-purple-500">
+                                        <p className="text-xl font-black mb-6 text-gray-800">{i+1}. {q.question}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+                                            {q.options.map((opt, oi) => (
+                                                <div key={oi} className={`p-4 rounded-2xl border-2 transition-all ${oi===q.correctIndex ? 'bg-green-50 border-green-500 font-black text-green-800' : 'border-gray-100 text-gray-400 italic'}`}>{opt}</div>
+                                            ))}
+                                        </div>
+                                        <div className="bg-purple-50 p-6 rounded-2xl text-base leading-relaxed text-purple-900 border border-purple-100 shadow-inner">
+                                            <div className="flex items-center gap-2 font-black text-xs uppercase mb-2 opacity-50"><GraduationCap className="w-4 h-4"/> Resolução Comentada</div>
+                                            {q.explanation}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                        ))}
                     </div>
-                    </div>
-                </div>
                 );
             }
-
             return null;
         }
 
-        // ==========================================
-        // VISÃO DO ALUNO (STUDENT)
-        // ==========================================
         function StudentView({ user, onExit }) {
             const [pin, setPin] = useState('');
             const [nickname, setNickname] = useState('');
@@ -864,327 +452,111 @@
             const [myScore, setMyScore] = useState(0);
             const [myAnswers, setMyAnswers] = useState({});
             const [hasAnswered, setHasAnswered] = useState(false);
-            const [answerResult, setAnswerResult] = useState(null); 
+            const [answerResult, setAnswerResult] = useState(null);
 
             useEffect(() => {
-                const urlParams = new URLSearchParams(window.location.search);
-                const pinFromUrl = urlParams.get('pin');
-                if (pinFromUrl) {
-                setPin(pinFromUrl);
-                }
+                const urlPin = new URLSearchParams(window.location.search).get('pin');
+                if (urlPin) setPin(urlPin);
             }, []);
 
-            const joinGame = async (e) => {
+            const join = async (e) => {
                 e.preventDefault();
                 if (!pin || !nickname) return;
-                setErrorMsg('');
-
                 try {
-                const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', pin);
-                
-                // Em tempo real simulamos verificacao. Na vida real deveriamos usar getDoc().
-                // Mas as regras restritas permitem usar onSnapshot ou assumir o doc:
-                const pId = `${pin}_${user.uid}`;
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', pId), {
-                    gameId: pin,
-                    userId: user.uid,
-                    nickname: nickname,
-                    score: 0,
-                    answers: {}
-                });
-                setPlayerDocId(pId);
-                setGame({ pin });
-                } catch (err) {
-                console.error(err);
-                setErrorMsg("Erro ao entrar. Verifique o PIN.");
-                }
+                    const id = `${pin}_${user.uid}`;
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), {
+                        gameId: pin, userId: user.uid, nickname, score: 0, answers: {}
+                    });
+                    setPlayerDocId(id);
+                    setGame({ pin });
+                } catch (e) { setErrorMsg("Erro ao entrar. Verifique o PIN."); }
             };
 
             useEffect(() => {
                 if (!game?.pin || !playerDocId) return;
-
-                const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (docSnap) => {
-                if (docSnap.exists()) {
-                    setGame(docSnap.data());
-                } else {
-                    setErrorMsg("O jogo foi encerrado pelo professor.");
-                }
-                }, (error) => console.error(error));
-
-                const unsubPlayer = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), (docSnap) => {
-                    if(docSnap.exists()) {
-                        const data = docSnap.data();
-                        setMyScore(data.score || 0);
-                        setMyAnswers(data.answers || {});
+                const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
+                    if (snap.exists()) setGame(snap.data());
+                });
+                const unsubPlayer = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), (snap) => {
+                    if (snap.exists()) {
+                        setMyScore(snap.data().score || 0);
+                        setMyAnswers(snap.data().answers || {});
                     }
                 });
-
                 return () => { unsubGame(); unsubPlayer(); };
             }, [game?.pin, playerDocId]);
 
-            useEffect(() => {
-                setHasAnswered(false);
-                setAnswerResult(null);
-            }, [game?.currentQuestionIndex, game?.status]);
+            useEffect(() => { setHasAnswered(false); setAnswerResult(null); }, [game?.currentQuestionIndex, game?.status]);
 
-
-            const submitAnswer = async (index) => {
+            const submit = async (idx) => {
                 if (hasAnswered || game?.status !== 'question') return;
                 setHasAnswered(true);
-
-                const currentQ = game.questions[game.currentQuestionIndex];
-                const isCorrect = index === currentQ.correctIndex;
-                
-                const maxTimeMs = (game.timePerQuestion || 20) * 1000;
-                const timeTakenMs = Date.now() - (game.endTime - maxTimeMs);
-                let points = 0;
-                if (isCorrect) {
-                const timeRatio = Math.max(0, 1 - (timeTakenMs / maxTimeMs));
-                points = Math.round(500 + (500 * timeRatio));
-                }
-
-                setAnswerResult(isCorrect ? 'correct' : 'incorrect');
-
-                try {
-                const pRef = doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId);
-                await updateDoc(pRef, {
-                    score: myScore + points,
-                    [`answers.${game.currentQuestionIndex}`]: {
-                    optionIndex: index,
-                    points: points,
-                    correct: isCorrect
-                    }
+                const q = game.questions[game.currentQuestionIndex];
+                const correct = idx === q.correctIndex;
+                const basePoints = 500;
+                const bonus = correct ? Math.round(500 * (1 - (Date.now() - (game.endTime - game.timePerQuestion*1000))/(game.timePerQuestion*1000))) : 0;
+                setAnswerResult(correct ? 'correct' : 'incorrect');
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), {
+                    score: myScore + (correct ? (basePoints + Math.max(0, bonus)) : 0),
+                    [`answers.${game.currentQuestionIndex}`]: { optionIndex: idx, correct }
                 });
-                } catch (err) {
-                console.error("Erro ao enviar resposta", err);
-                }
             };
 
             if (!game?.status) {
                 return (
-                <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-800">Entrar no Jogo</h2>
-                        <button onClick={onExit} className="text-gray-400 hover:text-red-500"><XCircle className="w-6 h-6" /></button>
+                    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+                        <form onSubmit={join} className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-sm">
+                            <h2 className="text-3xl font-black mb-8 text-center text-gray-800">SUPERANDO-SE</h2>
+                            <input type="text" placeholder="PIN DO JOGO" value={pin} onChange={(e)=>setPin(e.target.value)} className="w-full text-center text-5xl font-black p-5 border-4 border-gray-100 rounded-2xl mb-4 focus:border-blue-500 outline-none transition-colors" maxLength="6" />
+                            <input type="text" placeholder="TEU APELIDO" value={nickname} onChange={(e)=>setNickname(e.target.value)} className="w-full text-center font-black p-4 border-2 border-gray-100 rounded-xl mb-6 outline-none" maxLength="12" />
+                            {errorMsg && <p className="text-red-500 text-xs text-center mb-4 font-bold">{errorMsg}</p>}
+                            <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-blue-700 transition-colors">VAMOS LÁ!</button>
+                        </form>
                     </div>
-                    
-                    <form onSubmit={joinGame} className="space-y-4">
-                        <div>
-                        <input 
-                            type="text" 
-                            placeholder="PIN do Jogo" 
-                            value={pin} 
-                            onChange={(e) => setPin(e.target.value)}
-                            className="w-full text-center text-3xl font-bold px-4 py-4 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
-                            maxLength="6"
-                        />
-                        </div>
-                        <div>
-                        <input 
-                            type="text" 
-                            placeholder="O seu Nome" 
-                            value={nickname} 
-                            onChange={(e) => setNickname(e.target.value)}
-                            className="w-full text-center text-xl font-semibold px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
-                            maxLength="15"
-                        />
-                        </div>
-                        
-                        {errorMsg && <div className="text-red-500 text-sm text-center font-bold">{errorMsg}</div>}
-                        
-                        <button 
-                        type="submit"
-                        disabled={!pin || !nickname}
-                        className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl mt-4 disabled:opacity-50"
-                        >
-                        Entrar
-                        </button>
-                    </form>
-                    </div>
-                </div>
                 );
             }
 
-            if (game.status === 'lobby') {
-                return (
-                <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-4">
-                    <h1 className="text-4xl font-bold text-white mb-4">Já entrou!</h1>
-                    <p className="text-xl text-green-100 font-semibold mb-8">Veja o seu nome no ecrã do professor.</p>
-                    <div className="bg-green-600 px-8 py-4 rounded-full text-white text-2xl font-bold shadow-inner">
-                    {nickname}
-                    </div>
-                </div>
-                );
-            }
+            if (game.status === 'lobby') return <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-8 text-white"><h1 className="text-5xl font-black mb-4 animate-pulse uppercase">DENTRO!</h1><p className="text-xl font-bold opacity-80">Vê o teu nome no ecrã do professor.</p></div>;
 
             if (game.status === 'question') {
-                if (hasAnswered) {
+                if (hasAnswered) return <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center text-white"><Loader2 className="animate-spin w-16 h-16 opacity-30 mb-4" /><p className="font-black text-2xl uppercase tracking-widest italic opacity-50">Enviado!</p></div>;
                 return (
-                    <div className="min-h-screen bg-gray-200 flex flex-col items-center justify-center">
-                    <Loader2 className="w-16 h-16 text-gray-400 animate-spin mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-600">A aguardar outros jogadores...</h2>
+                    <div className="min-h-screen grid grid-cols-2 grid-rows-2 gap-2 p-2 bg-gray-200">
+                        {[0,1,2,3].map(i => <button key={i} onClick={()=>submit(i)} className={`${SHAPE_COLORS[i]} rounded-3xl flex items-center justify-center shadow-xl active:scale-95 transition-transform`}>{React.createElement(SHAPE_ICONS[i], {className: "w-28 h-28 fill-white"})}</button>)}
                     </div>
-                );
-                }
-
-                return (
-                <div className="min-h-screen bg-gray-100 p-2 flex flex-col">
-                    <div className="grid grid-cols-2 grid-rows-2 gap-2 flex-1">
-                    {[0, 1, 2, 3].map((idx) => {
-                        const Icon = SHAPE_ICONS[idx];
-                        return (
-                        <button 
-                            key={idx} 
-                            onClick={() => submitAnswer(idx)}
-                            className={`${SHAPE_COLORS[idx]} rounded-xl shadow-md flex items-center justify-center active:scale-95 transition-transform`}
-                        >
-                            <Icon className="w-24 h-24 text-white fill-white drop-shadow-md" />
-                        </button>
-                        );
-                    })}
-                    </div>
-                    <div className="text-center py-2 bg-white mt-2 rounded-lg shadow font-bold text-gray-700">
-                    Sua Pontuação: {myScore}
-                    </div>
-                </div>
                 );
             }
 
-            if (game.status === 'leaderboard') {
-                return (
-                <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${
-                    answerResult === 'correct' ? 'bg-green-500' : 
-                    answerResult === 'incorrect' ? 'bg-red-500' : 'bg-blue-500'
-                }`}>
-                    <div className="bg-white/20 p-8 rounded-full mb-6">
-                    {answerResult === 'correct' && <CheckCircle2 className="w-24 h-24 text-white" />}
-                    {answerResult === 'incorrect' && <XCircle className="w-24 h-24 text-white" />}
-                    {!answerResult && <Circle className="w-24 h-24 text-white" />}
-                    </div>
-                    
-                    <h1 className="text-5xl font-bold text-white mb-2">
-                    {answerResult === 'correct' ? 'Correto!' : answerResult === 'incorrect' ? 'Incorreto!' : 'Tempo Esgotado!'}
-                    </h1>
-                    <div className="bg-black/20 px-6 py-2 rounded-full text-white font-bold mt-4">
-                    Sua Pontuação Total: {myScore}
-                    </div>
-                </div>
-                );
-            }
+            if (game.status === 'leaderboard') return <div className={`min-h-screen flex flex-col items-center justify-center text-white transition-colors duration-500 ${answerResult==='correct'?'bg-green-500':'bg-red-500'}`}><h1 className="text-8xl font-black mb-4">{answerResult==='correct'?'SIM!':'NÃO!'}</h1><p className="text-2xl font-bold opacity-80 uppercase tracking-widest">Total: {myScore} pts</p></div>;
 
-            if (game.status === 'podium') {
-                return (
-                <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center p-4 text-center">
-                    <h1 className="text-4xl font-bold text-white mb-4">Fim de Jogo!</h1>
-                    <p className="text-2xl text-purple-200 mb-8">Olhe para o ecrã do professor para ver o pódio.</p>
-                    <div className="bg-white p-6 rounded-2xl shadow-xl inline-block">
-                    <p className="text-gray-500 font-semibold mb-1">Sua Pontuação Final</p>
-                    <p className="text-5xl font-black text-purple-600">{myScore}</p>
-                    </div>
-                    
-                    <div className="mt-16 flex flex-col items-center gap-4">
-                    <Loader2 className="w-8 h-8 text-purple-300 animate-spin" />
-                    <p className="text-purple-200 font-medium">A aguardar que o professor disponibilize a correção...</p>
-                    </div>
-                </div>
-                );
-            }
+            if (game.status === 'podium') return <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white p-8"><h1 className="text-4xl font-black mb-4 uppercase tracking-tighter italic">Acabou!</h1><div className="bg-white/10 p-10 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-md text-center"><p className="font-bold text-purple-300 uppercase text-xs mb-2">Tua Pontuação</p><p className="text-7xl font-black text-white">{myScore}</p></div></div>;
 
             if (game.status === 'report') {
                 return (
-                <div className="min-h-screen bg-gray-100 p-4 md:p-8 overflow-y-auto">
-                    <div className="max-w-3xl mx-auto">
-                    <div className="bg-white rounded-2xl p-6 shadow-md mb-8 text-center border border-gray-100">
-                        <h1 className="text-2xl md:text-3xl font-bold text-purple-800 mb-2">O Seu Desempenho</h1>
-                        <p className="text-xl text-gray-600">Pontuação Final: <span className="font-bold text-purple-600">{myScore}</span></p>
-                    </div>
-                    
-                    <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                        <BookOpen className="w-6 h-6 text-purple-600"/> Soluções e Correção
-                    </h2>
-                    
-                    <div className="space-y-6">
-                        {game.questions.map((q, i) => {
-                        const myAns = myAnswers[i];
-                        const isCorrect = myAns?.correct;
-                        const myOptIdx = myAns?.optionIndex;
-
-                        return (
-                            <div key={i} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-200">
-                            <div className="flex items-start justify-between gap-4 mb-4">
-                                <h3 className="text-lg font-bold text-gray-800">
-                                <span className="text-purple-600 mr-1">Q{i + 1}.</span> {q.question}
-                                </h3>
-                                {myAns ? (
-                                isCorrect 
-                                    ? <CheckCircle2 className="w-8 h-8 text-green-500 shrink-0" /> 
-                                    : <XCircle className="w-8 h-8 text-red-500 shrink-0" />
-                                ) : (
-                                <span className="bg-gray-200 text-gray-600 px-3 py-1 rounded-full text-xs font-bold shrink-0 uppercase">Não respondida</span>
-                                )}
-                            </div>
-                            
-                            <div className="space-y-3 mb-6">
-                                {q.options.map((opt, optIdx) => {
-                                let style = 'bg-gray-50 border-gray-200 text-gray-600';
-                                let label = '';
-                                
-                                if (optIdx === q.correctIndex) {
-                                    style = 'bg-green-50 border-green-500 font-bold text-green-900';
-                                    if (optIdx === myOptIdx) label = 'Acertou';
-                                    else label = 'Resposta Correta';
-                                } else if (optIdx === myOptIdx) {
-                                    style = 'bg-red-50 border-red-500 font-bold text-red-900';
-                                    label = 'A sua Resposta';
-                                }
-
-                                return (
-                                    <div key={optIdx} className={`p-4 rounded-xl border-2 flex justify-between items-center ${style}`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 ${
-                                        optIdx === q.correctIndex ? 'bg-green-500 text-white' : 
-                                        optIdx === myOptIdx ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'
-                                        }`}>
-                                        {String.fromCharCode(65 + optIdx)}
+                    <div className="min-h-screen bg-gray-100 p-6 overflow-y-auto">
+                        <div className="max-w-2xl mx-auto">
+                            <h1 className="text-3xl font-black mb-8 text-purple-900 italic">TEU DESEMPENHO</h1>
+                            <div className="space-y-6">
+                                {game.questions.map((q, i) => (
+                                    <div key={i} className="bg-white p-8 rounded-3xl shadow-lg border-2 border-gray-100">
+                                        <div className="flex justify-between items-start gap-4 mb-4">
+                                            <p className="font-black text-xl leading-tight">{i+1}. {q.question}</p>
+                                            <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${myAnswers[i]?.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{myAnswers[i]?.correct ? '✓' : '✗'}</div>
                                         </div>
-                                        <span className="break-words">{opt}</span>
+                                        <div className="p-4 bg-purple-50 rounded-2xl text-sm leading-relaxed border border-purple-100 italic shadow-inner">{q.explanation}</div>
                                     </div>
-                                    {label && <span className="text-[10px] md:text-xs uppercase tracking-wider opacity-80 font-bold text-right ml-2 shrink-0">{label}</span>}
-                                    </div>
-                                );
-                                })}
+                                ))}
                             </div>
-                            
-                            <div className="bg-purple-50 p-5 rounded-xl border border-purple-100">
-                                <h4 className="font-bold text-purple-800 mb-3 flex items-center gap-2 uppercase tracking-wide text-xs">
-                                <GraduationCap className="w-4 h-4"/> Resolução Comentada
-                                </h4>
-                                <p className="text-gray-700 text-sm md:text-base leading-relaxed whitespace-pre-wrap">{q.explanation}</p>
-                            </div>
-                            </div>
-                        );
-                        })}
+                            <button onClick={onExit} className="w-full mt-10 bg-gray-900 text-white py-5 rounded-2xl font-black text-xl shadow-2xl">SAIR</button>
+                        </div>
                     </div>
-                    
-                    <button 
-                        onClick={onExit}
-                        className="mt-8 w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg"
-                    >
-                        Sair do Jogo
-                    </button>
-                    </div>
-                </div>
                 );
             }
-
             return null;
         }
 
-        // Renderização raiz do React
         const root = createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
-
