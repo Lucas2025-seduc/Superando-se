@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Superando-se</title>
+    <title>Superando-se - Prof. Lucas Silva</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Import Maps para carregar React, Lucide Icons e Firebase no navegador -->
+    <!-- Import Maps para carregar bibliotecas via CDN -->
     <script type="importmap">
     {
         "imports": {
@@ -22,8 +22,15 @@
     }
     </script>
     
-    <!-- Babel para compilar JSX no navegador -->
+    <!-- Babel para compilar JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-soft { animation: pulse-soft 2s infinite; }
+    </style>
 </head>
 <body class="bg-gray-100 font-sans selection:bg-purple-300">
     
@@ -34,14 +41,14 @@
         import { createRoot } from 'react-dom/client';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
         import { Triangle, Square, Circle, Hexagon, Trophy, Users, Play, Loader2, Key, CheckCircle2, XCircle, Beaker, BookOpen, GraduationCap, Settings } from 'lucide-react';
 
-        // --- CONFIGURAÇÃO FIREBASE FINAL (Baseada nas suas fotos) ---
+        // --- CONFIGURAÇÃO FIREBASE (Sincronizada com as suas imagens) ---
         const myFirebaseConfig = {
             apiKey: "AIzaSyCQg38W6tun8YK9QALtnL1AAkUlV5q-dVs",
             authDomain: "superando-se.firebaseapp.com",
-            projectId: "Superando", // Corrigido para corresponder à sua imagem image_88b387.png
+            projectId: "Superando", 
             storageBucket: "superando-se.firebasestorage.app",
             messagingSenderId: "635704160880",
             appId: "1:635704160880:web:bf03fbddcabdf527a63ab5",
@@ -50,15 +57,14 @@
 
         let app, auth, db, appId;
         try {
-            // Se estiver no Vercel ou produção, usa myFirebaseConfig
+            // Verifica se está no ambiente de pré-visualização ou produção
             const finalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : myFirebaseConfig;
-            
             app = initializeApp(finalConfig);
             auth = getAuth(app);
             db = getFirestore(app);
             appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-kahoot-app';
         } catch (error) {
-            console.error("Erro ao inicializar Firebase:", error);
+            console.error("Erro Crítico Firebase:", error);
         }
 
         const SHAPE_COLORS = ['bg-red-500', 'bg-blue-500', 'bg-yellow-500', 'bg-green-500'];
@@ -67,7 +73,7 @@
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home'); 
-            const [authError, setAuthError] = useState('');
+            const [initError, setInitError] = useState('');
             
             useEffect(() => {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -85,11 +91,7 @@
                         }
                     } catch (err) {
                         console.error("Erro Autenticação:", err);
-                        if (err.code === 'auth/operation-not-allowed') {
-                            setAuthError("Ative o 'Login Anónimo' no Firebase Console!");
-                        } else {
-                            setAuthError("Erro de ligação: " + err.message);
-                        }
+                        setInitError("Falha na ligação ao servidor. Verifique se o 'Login Anónimo' está ativo no Firebase.");
                     }
                 };
                 initAuth();
@@ -97,12 +99,12 @@
                 return () => unsubscribe();
             }, []);
 
-            if (authError) {
+            if (initError) {
                 return (
                     <div className="min-h-screen bg-red-900 flex flex-col items-center justify-center text-white p-6 text-center">
-                        <XCircle className="w-20 h-20 mb-6" />
-                        <h1 className="text-2xl font-bold mb-4">Erro de Configuração</h1>
-                        <p className="bg-red-800 p-4 rounded-lg">{authError}</p>
+                        <XCircle className="w-20 h-20 mb-6 text-red-300" />
+                        <h1 className="text-2xl font-bold mb-4 italic uppercase tracking-tighter">Erro de Ligação</h1>
+                        <p className="bg-red-800/50 p-6 rounded-2xl border border-red-700 max-w-md">{initError}</p>
                     </div>
                 );
             }
@@ -110,14 +112,14 @@
             if (!user) {
                 return (
                     <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white">
-                        <Loader2 className="w-12 h-12 animate-spin mb-4" />
-                        <p className="animate-pulse">A ligar ao Superando-se...</p>
+                        <Loader2 className="w-16 h-16 animate-spin mb-4 opacity-50" />
+                        <p className="font-bold tracking-widest uppercase text-xs opacity-70">A carregar Superando-se...</p>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen">
+                <div className="min-h-screen transition-all duration-500">
                     {view === 'home' && <HomeView setView={setView} />}
                     {view === 'host' && <HostView user={user} onExit={() => setView('home')} />}
                     {view === 'student' && <StudentView user={user} onExit={() => setView('home')} />}
@@ -128,19 +130,23 @@
         function HomeView({ setView }) {
             return (
                 <div className="min-h-screen bg-purple-600 flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-                        <div className="flex justify-center mb-4">
-                            <GraduationCap className="w-16 h-16 text-purple-600" />
+                    <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full text-center border-b-8 border-gray-200">
+                        <div className="flex justify-center mb-6">
+                            <div className="bg-purple-100 p-6 rounded-full">
+                                <GraduationCap className="w-16 h-16 text-purple-600" />
+                            </div>
                         </div>
-                        <h1 className="text-4xl font-extrabold text-gray-800 mb-1 tracking-tight">Superando-se</h1>
-                        <p className="text-sm text-gray-500 font-medium mb-8">uma proposta do professor Lucas Sebastião Barbosa Silva</p>
+                        <h1 className="text-5xl font-black text-gray-800 mb-2 tracking-tighter italic">Superando-se</h1>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-10 leading-tight">
+                            uma proposta do professor<br/>Lucas Sebastião Barbosa Silva
+                        </p>
                         
                         <div className="space-y-4">
-                            <button onClick={() => setView('student')} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(37,99,235)] active:translate-y-1 active:shadow-none transition-all text-xl">
-                                Entrar como Aluno
+                            <button onClick={() => setView('student')} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-black py-5 rounded-2xl shadow-[0_6px_0_rgb(30,64,175)] active:translate-y-1 active:shadow-none transition-all text-2xl uppercase tracking-tighter">
+                                Jogar
                             </button>
-                            <button onClick={() => setView('host')} className="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-4 rounded-xl shadow-[0_4px_0_rgb(216,180,254)] active:translate-y-1 active:shadow-none transition-all text-lg">
-                                Sou Professor (Criar Sala)
+                            <button onClick={() => setView('host')} className="w-full bg-purple-100 hover:bg-purple-200 text-purple-700 font-black py-4 rounded-2xl transition-all text-lg uppercase tracking-tight">
+                                Sou Professor
                             </button>
                         </div>
                     </div>
@@ -168,7 +174,7 @@
             const [timeRemaining, setTimeRemaining] = useState(0);
 
             const testApiKey = async () => {
-                if (!apiKey.trim()) return setErrorMsg("Insira a chave Gemini.");
+                if (!apiKey.trim()) return setErrorMsg("Introduza a sua chave Gemini.");
                 setKeyStatus('testing');
                 setErrorMsg('');
                 const models = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
@@ -180,19 +186,19 @@
                     } catch (e) {}
                 }
                 if (working) { setActiveModel(working); setKeyStatus('valid'); }
-                else { setKeyStatus('invalid'); setErrorMsg("Chave Gemini inválida."); }
+                else { setKeyStatus('invalid'); setErrorMsg("A chave Gemini não é válida ou a rede falhou."); }
             };
 
             const generateQuestions = async () => {
-                if (!activeModel || keyStatus !== 'valid') return setErrorMsg("Valide a chave primeiro.");
-                if (!discipline || !generalContent || !specificContent) return setErrorMsg("Preencha os campos de assunto.");
+                if (!activeModel || keyStatus !== 'valid') return setErrorMsg("Valide a chave Gemini primeiro.");
+                if (!discipline || !generalContent || !specificContent) return setErrorMsg("Preencha todos os campos do assunto.");
                 
                 setIsGenerating(true);
                 setErrorMsg('');
 
-                const prompt = `Atue como professor de "${discipline}". Gere ${numQuestions} questões de múltipla escolha (${difficultyLevel}, estilo ${examModel}). 
-                Assunto: "${generalContent}" - "${specificContent}". 
-                Retorne apenas um array JSON: [{"question": "...", "options": ["A","B","C","D"], "correctIndex": 0}].`;
+                const prompt = `Atue como professor especialista de "${discipline}". Gere ${numQuestions} questões de múltipla escolha para o nível "${difficultyLevel}", estilo "${examModel}". 
+                Assunto Geral: "${generalContent}". Específico: "${specificContent}". 
+                Retorne estritamente um array JSON sem markdown: [{"question": "...", "options": ["A","B","C","D"], "correctIndex": 0}].`;
 
                 try {
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
@@ -204,23 +210,25 @@
                         })
                     });
 
-                    if (!res.ok) throw new Error("Erro na IA.");
+                    if (!res.ok) throw new Error("A IA Gemini não respondeu corretamente.");
                     const data = await res.json();
-                    const raw = data.candidates[0].content.parts[0].text;
-                    const json = JSON.parse(raw.replace(/```json/g, '').replace(/```/g, '').trim());
+                    let rawText = data.candidates[0].content.parts[0].text;
+                    const questions = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
 
                     const pin = Math.floor(100000 + Math.random() * 900000).toString();
                     const gameData = {
-                        pin, hostId: user.uid, status: 'lobby', questions: json, 
+                        pin, hostId: user.uid, status: 'lobby', questions, 
                         currentQuestionIndex: 0, timePerQuestion: Number(timePerQuestion),
                         createdAt: Date.now(), context: { discipline, generalContent }
                     };
 
+                    // Gravação no Firestore com tratamento de erro
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin), gameData);
                     setGame(gameData);
                     setStep('lobby');
                 } catch (err) {
-                    setErrorMsg("Erro ao criar sala: Verifique se as Regras do Firebase estão como 'true'.");
+                    setErrorMsg("Erro: Certifique-se de que o ID do projeto é 'Superando' e as Regras do Firestore estão como 'if true'.");
+                    console.error(err);
                 } finally {
                     setIsGenerating(false);
                 }
@@ -230,10 +238,12 @@
                 if (!game?.pin) return;
                 const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
                     if (snap.exists()) setGame(snap.data());
-                });
+                }, (err) => console.error("Erro Game Snapshot:", err));
+
                 const unsubPlayers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snap) => {
                     setPlayers(snap.docs.map(d => d.data()).filter(p => p.gameId === game.pin));
-                });
+                }, (err) => console.error("Erro Players Snapshot:", err));
+
                 return () => { unsubGame(); unsubPlayers(); };
             }, [game?.pin]);
 
@@ -250,7 +260,7 @@
                     }, 1000);
                 }
                 return () => clearInterval(interval);
-            }, [game?.status, game?.endTime]);
+            }, [game?.status, game?.endTime, game?.pin]);
 
             const startGame = () => {
                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { 
@@ -271,7 +281,7 @@
 
             const generateExplanations = async () => {
                 setIsGeneratingReport(true);
-                const prompt = `Gere explicações didáticas para estas questões: ${JSON.stringify(game.questions)}. Retorne array JSON: [{"explanation": "..."}].`;
+                const prompt = `Gere uma resolução explicativa, clara e objetiva para estas questões de "${game.context?.discipline}": ${JSON.stringify(game.questions)}. Retorne array JSON: [{"explanation": "..."}].`;
                 try {
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${apiKey.trim()}`, {
                         method: 'POST',
@@ -280,41 +290,68 @@
                     });
                     const data = await res.json();
                     const expls = JSON.parse(data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim());
-                    const updated = game.questions.map((q, i) => ({ ...q, explanation: expls[i]?.explanation || "Sem comentário." }));
+                    const updated = game.questions.map((q, i) => ({ ...q, explanation: expls[i]?.explanation || "Explicação não disponível." }));
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), { questions: updated, status: 'report' });
-                } catch (e) { alert("Erro na correção."); }
+                } catch (e) { alert("Não foi possível gerar a correção detalhada."); }
                 finally { setIsGeneratingReport(false); }
             };
 
             if (step === 'setup') {
                 return (
                     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
-                            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800"><Settings className="text-purple-600"/> Configuração</h2>
+                        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-lg border-t-8 border-purple-500">
+                            <h2 className="text-2xl font-black mb-6 flex items-center gap-2 text-gray-800 uppercase tracking-tighter"><Settings className="text-purple-600"/> Configuração</h2>
                             <div className="space-y-4">
-                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                                    <div className="flex justify-between text-[10px] font-bold text-purple-900 mb-1">
-                                        <span>CHAVE GOOGLE GEMINI</span>
-                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline">Obter chave</a>
+                                <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 shadow-inner">
+                                    <div className="flex justify-between text-[10px] font-black text-purple-900 mb-2 uppercase tracking-widest">
+                                        <span>Chave Google Gemini</span>
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline">Obter grátis</a>
                                     </div>
                                     <div className="flex gap-2">
-                                        <input type="password" value={apiKey} onChange={(e)=>setApiKey(e.target.value)} placeholder="AIza..." className="flex-1 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-purple-400" />
-                                        <button onClick={testApiKey} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold">{keyStatus==='testing' ? '...' : 'Testar'}</button>
+                                        <input type="password" value={apiKey} onChange={(e)=>setApiKey(e.target.value)} placeholder="Cole aqui a sua chave..." className="flex-1 p-3 border-2 border-purple-100 rounded-xl outline-none focus:border-purple-500 text-sm" />
+                                        <button onClick={testApiKey} className="bg-purple-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors">{keyStatus==='testing' ? '...' : 'Testar'}</button>
                                     </div>
-                                    {keyStatus==='valid' && <p className="text-[10px] text-green-600 mt-1 font-bold">✓ Conectado: {activeModel}</p>}
+                                    {keyStatus==='valid' && <p className="text-[10px] text-green-600 mt-2 font-black italic">✓ Ligado ao modelo: {activeModel}</p>}
                                 </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                    <input type="text" placeholder="Disciplina" value={discipline} onChange={(e)=>setDiscipline(e.target.value)} className="p-2 border rounded-lg text-sm" />
-                                    <input type="text" placeholder="Geral" value={generalContent} onChange={(e)=>setGeneralContent(e.target.value)} className="p-2 border rounded-lg text-sm" />
-                                    <input type="text" placeholder="Específico" value={specificContent} onChange={(e)=>setSpecificContent(e.target.value)} className="p-2 border rounded-lg text-sm" />
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Disciplina</label>
+                                        <input type="text" value={discipline} onChange={(e)=>setDiscipline(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Biologia" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Geral</label>
+                                        <input type="text" value={generalContent} onChange={(e)=>setGeneralContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Citologia" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Específico</label>
+                                        <input type="text" value={specificContent} onChange={(e)=>setSpecificContent(e.target.value)} className="p-3 border-2 border-gray-100 rounded-xl text-sm focus:border-purple-400 outline-none" placeholder="Ex: Mitocôndrias" />
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <select value={numQuestions} onChange={(e)=>setNumQuestions(Number(e.target.value))} className="p-2 border rounded-lg text-sm"><option value={3}>3 Questões</option><option value={5}>5 Questões</option><option value={10}>10 Questões</option></select>
-                                    <select value={timePerQuestion} onChange={(e)=>setTimePerQuestion(Number(e.target.value))} className="p-2 border rounded-lg text-sm"><option value={20}>20 seg</option><option value={60}>1 min</option><option value={300}>5 min</option></select>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Questões</label>
+                                        <select value={numQuestions} onChange={(e)=>setNumQuestions(Number(e.target.value))} className="w-full p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
+                                            <option value={3}>3 Questões</option>
+                                            <option value={5}>5 Questões</option>
+                                            <option value={10}>10 Questões</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Tempo</label>
+                                        <select value={timePerQuestion} onChange={(e)=>setTimePerQuestion(Number(e.target.value))} className="w-full p-3 border-2 border-gray-100 rounded-xl text-sm font-bold">
+                                            <option value={20}>20 seg</option>
+                                            <option value={60}>1 min</option>
+                                            <option value={300}>5 min</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                {errorMsg && <p className="text-red-500 text-xs font-bold">{errorMsg}</p>}
-                                <button onClick={generateQuestions} disabled={isGenerating || keyStatus!=='valid'} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-green-600 disabled:bg-gray-300">
-                                    {isGenerating ? 'A gerar questões...' : 'Criar Sala'}
+
+                                {errorMsg && <p className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-lg border border-red-100">{errorMsg}</p>}
+                                
+                                <button onClick={generateQuestions} disabled={isGenerating || keyStatus!=='valid'} className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-black text-xl shadow-xl transition-all disabled:bg-gray-200 uppercase tracking-tighter italic">
+                                    {isGenerating ? 'A gerar questões...' : 'Abrir Sala de Aula'}
                                 </button>
                             </div>
                         </div>
@@ -324,26 +361,30 @@
 
             if (game?.status === 'lobby') {
                 const joinUrl = `${window.location.origin}${window.location.pathname}?pin=${game.pin}`;
-                const qr = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
+                const qr = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(joinUrl)}`;
                 return (
-                    <div className="min-h-screen bg-purple-700 text-white flex flex-col items-center justify-center p-8">
-                        <div className="flex flex-col md:flex-row gap-8 items-center bg-white/10 p-12 rounded-3xl border border-white/20 shadow-2xl">
+                    <div className="min-h-screen bg-purple-700 text-white flex flex-col items-center justify-center p-6">
+                        <div className="flex flex-col md:flex-row gap-10 items-center bg-white/10 p-12 rounded-[3rem] border border-white/20 shadow-2xl backdrop-blur-md">
                             <div className="text-center">
-                                <h2 className="text-2xl mb-2 opacity-80 uppercase tracking-widest font-light">Pin da Sala</h2>
-                                <div className="bg-white text-purple-900 text-8xl font-black py-4 px-10 rounded-2xl shadow-inner">{game.pin}</div>
+                                <h2 className="text-3xl mb-4 opacity-70 uppercase tracking-widest font-light">PIN DO JOGO</h2>
+                                <div className="bg-white text-purple-900 text-8xl md:text-9xl font-black py-6 px-14 rounded-3xl shadow-inner tracking-tighter">
+                                    {game.pin}
+                                </div>
                             </div>
-                            <div className="bg-white p-4 rounded-xl shadow-2xl flex flex-col items-center">
-                                <img src={qr} className="w-40 h-40" alt="QR Code" />
-                                <span className="text-black text-[10px] font-bold mt-2">DIGITALIZE PARA ENTRAR</span>
-                            </div>
-                        </div>
-                        <div className="mt-12 text-center w-full max-w-2xl">
-                            <div className="text-2xl font-bold mb-6 flex items-center justify-center gap-2"><Users/> {players.length} Jogadores</div>
-                            <div className="flex flex-wrap gap-2 justify-center">
-                                {players.map(p => <span key={p.userId} className="bg-white/20 px-4 py-2 rounded-full font-bold">{p.nickname}</span>)}
+                            <div className="bg-white p-5 rounded-[2rem] shadow-2xl flex flex-col items-center">
+                                <img src={qr} className="w-48 h-48 md:w-56 md:h-56" alt="QR Code" />
+                                <span className="text-black text-[10px] font-black mt-4 uppercase tracking-widest opacity-30 italic">Digitalize para entrar</span>
                             </div>
                         </div>
-                        <button onClick={startGame} disabled={players.length===0} className="mt-10 bg-blue-500 px-12 py-5 rounded-2xl font-black text-2xl shadow-xl hover:scale-105 transition-transform disabled:opacity-50">INICIAR</button>
+                        <div className="mt-14 text-center w-full max-w-3xl">
+                            <div className="text-3xl font-black mb-8 flex items-center justify-center gap-3"><Users className="w-8 h-8"/> {players.length} Alunos na Sala</div>
+                            <div className="flex flex-wrap gap-3 justify-center">
+                                {players.map(p => <span key={p.userId} className="bg-white/15 px-6 py-3 rounded-2xl font-black text-xl border border-white/5 animate-pulse-soft">{p.nickname}</span>)}
+                            </div>
+                        </div>
+                        <button onClick={startGame} disabled={players.length===0} className="mt-12 bg-blue-500 px-16 py-6 rounded-[2rem] font-black text-3xl shadow-[0_8px_0_rgb(30,64,175)] hover:bg-blue-400 active:translate-y-2 active:shadow-none transition-all disabled:opacity-30 uppercase tracking-tighter">
+                            COMEÇAR
+                        </button>
                     </div>
                 );
             }
@@ -352,15 +393,21 @@
                 const q = game.questions[game.currentQuestionIndex];
                 return (
                     <div className="min-h-screen bg-gray-100 flex flex-col">
-                        <div className="bg-white p-8 text-center shadow-lg"><h2 className="text-3xl md:text-5xl font-black text-gray-800">{q.question}</h2></div>
-                        <div className="flex-1 flex items-center justify-center">
-                            <div className="w-32 h-32 rounded-full border-[10px] border-purple-600 flex items-center justify-center text-4xl font-black text-purple-800 bg-white shadow-xl">{timeRemaining}</div>
+                        <div className="bg-white p-10 text-center shadow-lg border-b-8 border-gray-200">
+                            <h2 className="text-4xl md:text-6xl font-black text-gray-800 tracking-tighter italic">{q.question}</h2>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 p-4 h-72 md:h-80">
+                        <div className="flex-1 flex items-center justify-center relative">
+                            <div className="w-40 h-40 rounded-full border-[12px] border-purple-600 flex items-center justify-center text-5xl font-black text-purple-800 bg-white shadow-2xl">
+                                {timeRemaining}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 p-4 h-72 md:h-96">
                             {q.options.map((opt, i) => (
-                                <div key={i} className={`${SHAPE_COLORS[i]} rounded-2xl flex items-center p-6 gap-4 text-white shadow-xl`}>
-                                    {React.createElement(SHAPE_ICONS[i], { className: "w-10 h-10 fill-white shrink-0" })}
-                                    <span className="text-xl md:text-2xl font-bold">{opt}</span>
+                                <div key={i} className={`${SHAPE_COLORS[i]} rounded-3xl flex items-center p-8 gap-6 text-white shadow-xl overflow-hidden relative`}>
+                                    <div className="bg-white/20 p-4 rounded-2xl">
+                                        {React.createElement(SHAPE_ICONS[i], { className: "w-12 h-12 fill-white shrink-0" })}
+                                    </div>
+                                    <span className="text-2xl md:text-4xl font-black truncate tracking-tighter">{opt}</span>
                                 </div>
                             ))}
                         </div>
@@ -373,20 +420,26 @@
                 const q = game.questions[game.currentQuestionIndex];
                 return (
                     <div className="min-h-screen bg-purple-700 flex flex-col items-center p-8 text-white">
-                        <div className="bg-white text-gray-800 p-6 rounded-2xl w-full max-w-xl mb-8 text-center shadow-2xl border-b-8 border-gray-200">
-                            <p className="text-xs font-black text-gray-400 uppercase mb-2">Resposta Correta</p>
-                            <div className={`${SHAPE_COLORS[q.correctIndex]} p-4 rounded-xl text-white font-black text-2xl`}>{q.options[q.correctIndex]}</div>
+                        <div className="bg-white text-gray-800 p-8 rounded-[2.5rem] w-full max-w-2xl mb-12 text-center shadow-2xl border-b-[12px] border-gray-200">
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Resposta Correta</p>
+                            <div className={`${SHAPE_COLORS[q.correctIndex]} p-6 rounded-2xl text-white font-black text-3xl uppercase tracking-tighter`}>
+                                {q.options[q.correctIndex]}
+                            </div>
                         </div>
-                        <h2 className="text-4xl font-black mb-6 tracking-tighter italic">LÍDERES</h2>
-                        <div className="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl">
+                        <h2 className="text-5xl font-black mb-8 tracking-tighter italic uppercase underline decoration-purple-500 decoration-8">Líderes</h2>
+                        <div className="bg-white rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl text-gray-800 border-b-8 border-gray-100">
                             {sorted.map((p, i) => (
-                                <div key={p.userId} className="flex justify-between p-5 border-b text-gray-800 font-bold text-xl hover:bg-gray-50 transition-colors">
-                                    <span>{i+1}. {p.nickname}</span>
-                                    <span className="text-purple-600 font-black">{p.score}</span>
+                                <div key={p.userId} className={`flex justify-between items-center p-6 border-b-2 border-gray-50 ${i===0 ? 'bg-yellow-50' : ''}`}>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-gray-300 text-3xl font-black">{i+1}</span>
+                                        <span className="text-2xl font-black tracking-tight">{p.nickname}</span>
+                                    </div>
+                                    <span className="text-3xl font-black text-purple-600">{p.score}</span>
                                 </div>
                             ))}
+                            {sorted.length === 0 && <p className="p-10 text-center text-gray-300 font-bold uppercase italic tracking-widest">Nenhum ponto marcado</p>}
                         </div>
-                        <button onClick={nextQuestion} className="mt-8 bg-blue-500 px-12 py-4 rounded-xl font-black text-xl shadow-xl">PRÓXIMA</button>
+                        <button onClick={nextQuestion} className="mt-12 bg-blue-500 px-16 py-5 rounded-[2rem] font-black text-2xl shadow-xl">PRÓXIMA QUESTÃO</button>
                     </div>
                 );
             }
@@ -395,18 +448,30 @@
                 const sorted = [...players].sort((a,b)=> (b.score||0)-(a.score||0));
                 return (
                     <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center p-8 text-white">
-                        <Trophy className="w-24 h-24 text-yellow-400 mb-6 drop-shadow-lg animate-bounce" />
-                        <h1 className="text-6xl font-black mb-12 tracking-tight">PÓDIO</h1>
-                        <div className="flex items-end gap-3 h-64 w-full max-w-lg mb-12">
-                            {sorted[1] && <div className="flex-1 bg-blue-500 h-32 rounded-t-2xl flex flex-col items-center pt-2 font-bold shadow-lg border-x border-t border-blue-400"><span>2º</span><span className="text-xs truncate px-1">{sorted[1].nickname}</span></div>}
-                            {sorted[0] && <div className="flex-1 bg-yellow-500 h-52 rounded-t-2xl flex flex-col items-center pt-2 font-black shadow-2xl text-xl border-x border-t border-yellow-300"><span>1º</span><span className="text-sm truncate px-1">{sorted[0].nickname}</span></div>}
-                            {sorted[2] && <div className="flex-1 bg-green-500 h-24 rounded-t-2xl flex flex-col items-center pt-2 font-bold shadow-lg border-x border-t border-green-400"><span>3º</span><span className="text-xs truncate px-1">{sorted[2].nickname}</span></div>}
+                        <Trophy className="w-28 h-28 text-yellow-400 mb-6 drop-shadow-2xl animate-bounce" />
+                        <h1 className="text-7xl font-black mb-16 tracking-tighter italic uppercase">Pódio</h1>
+                        <div className="flex items-end gap-4 h-80 w-full max-w-2xl mb-16">
+                            {sorted[1] && <div className="flex-1 bg-blue-500 h-40 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-blue-400">
+                                <span className="text-5xl opacity-30 mb-2">2</span>
+                                <span className="text-xl truncate px-2 font-black">{sorted[1].nickname}</span>
+                                <span className="text-xs opacity-50">{sorted[1].score} pts</span>
+                            </div>}
+                            {sorted[0] && <div className="flex-1 bg-yellow-500 h-64 rounded-t-3xl flex flex-col items-center pt-4 font-black shadow-2xl border-t-8 border-yellow-300">
+                                <span className="text-6xl opacity-40 mb-2 italic">1</span>
+                                <span className="text-2xl truncate px-2">{sorted[0].nickname}</span>
+                                <span className="text-sm opacity-60 font-black">{sorted[0].score} pts</span>
+                            </div>}
+                            {sorted[2] && <div className="flex-1 bg-green-500 h-32 rounded-t-3xl flex flex-col items-center pt-4 font-bold shadow-2xl border-t-4 border-green-400">
+                                <span className="text-4xl opacity-30 mb-2">3</span>
+                                <span className="text-lg truncate px-2 font-black">{sorted[2].nickname}</span>
+                                <span className="text-xs opacity-50">{sorted[2].score} pts</span>
+                            </div>}
                         </div>
-                        <div className="flex gap-4">
-                            <button onClick={generateExplanations} disabled={isGeneratingReport} className="bg-blue-600 px-8 py-4 rounded-2xl font-black text-lg flex items-center gap-2 shadow-xl">
-                                {isGeneratingReport ? <Loader2 className="animate-spin"/> : <BookOpen/>} GERAR CORREÇÃO
+                        <div className="flex flex-col sm:flex-row gap-6">
+                            <button onClick={generateExplanations} disabled={isGeneratingReport} className="bg-blue-600 hover:bg-blue-500 px-12 py-5 rounded-[2rem] font-black text-xl flex items-center gap-3 shadow-2xl transition-all disabled:opacity-30">
+                                {isGeneratingReport ? <Loader2 className="animate-spin"/> : <BookOpen/>} GERAR CORREÇÃO COM IA
                             </button>
-                            <button onClick={onExit} className="bg-white/10 px-8 py-4 rounded-2xl font-bold">SAIR</button>
+                            <button onClick={onExit} className="bg-white/10 px-10 py-5 rounded-[2rem] font-bold border border-white/5">VOLTAR</button>
                         </div>
                     </div>
                 );
@@ -416,21 +481,26 @@
                 return (
                     <div className="min-h-screen bg-gray-50 p-6">
                         <div className="max-w-4xl mx-auto">
-                            <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                                <h1 className="text-3xl font-black text-purple-800 flex items-center gap-3"><BookOpen className="w-8 h-8"/> RELATÓRIO</h1>
-                                <button onClick={onExit} className="bg-red-500 text-white px-6 py-2 rounded-xl font-bold">FECHAR</button>
+                            <div className="flex justify-between items-center mb-10 bg-white p-8 rounded-[2.5rem] shadow-sm border-b-4 border-gray-100">
+                                <div>
+                                    <h1 className="text-4xl font-black text-purple-800 flex items-center gap-3 tracking-tighter italic uppercase"><BookOpen className="w-10 h-10"/> Relatório</h1>
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest ml-1">{discipline} • {generalContent}</p>
+                                </div>
+                                <button onClick={onExit} className="bg-red-500 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-tight text-sm shadow-lg">Finalizar</button>
                             </div>
-                            <div className="space-y-6">
+                            <div className="space-y-10">
                                 {game.questions.map((q, i) => (
-                                    <div key={i} className="bg-white p-8 rounded-3xl shadow-md border-l-[12px] border-purple-500">
-                                        <p className="text-xl font-black mb-6 text-gray-800">{i+1}. {q.question}</p>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+                                    <div key={i} className="bg-white p-10 rounded-[3rem] shadow-md border-l-[16px] border-purple-500">
+                                        <p className="text-2xl font-black mb-8 text-gray-800 leading-tight italic tracking-tighter">{i+1}. {q.question}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">
                                             {q.options.map((opt, oi) => (
-                                                <div key={oi} className={`p-4 rounded-2xl border-2 transition-all ${oi===q.correctIndex ? 'bg-green-50 border-green-500 font-black text-green-800' : 'border-gray-100 text-gray-400 italic'}`}>{opt}</div>
+                                                <div key={oi} className={`p-5 rounded-2xl border-2 transition-all ${oi===q.correctIndex ? 'bg-green-50 border-green-500 font-black text-green-800' : 'border-gray-50 text-gray-300 italic'}`}>
+                                                    <span className="mr-2 opacity-30">{String.fromCharCode(65 + oi)}:</span> {opt}
+                                                </div>
                                             ))}
                                         </div>
-                                        <div className="bg-purple-50 p-6 rounded-2xl text-base leading-relaxed text-purple-900 border border-purple-100 shadow-inner">
-                                            <div className="flex items-center gap-2 font-black text-xs uppercase mb-2 opacity-50"><GraduationCap className="w-4 h-4"/> Resolução Comentada</div>
+                                        <div className="bg-purple-50 p-8 rounded-[2rem] text-lg leading-relaxed text-purple-900 border border-purple-100 shadow-inner relative overflow-hidden">
+                                            <div className="flex items-center gap-2 font-black text-[10px] uppercase mb-4 opacity-40 tracking-widest"><GraduationCap className="w-5 h-5"/> Resolução Comentada</div>
                                             {q.explanation}
                                         </div>
                                     </div>
@@ -463,19 +533,29 @@
                 e.preventDefault();
                 if (!pin || !nickname) return;
                 try {
+                    // Verifica se o jogo existe antes de entrar
+                    const gameSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', pin));
+                    if (!gameSnap.exists()) {
+                        setErrorMsg("Este PIN não existe ou a sala foi encerrada.");
+                        return;
+                    }
+
                     const id = `${pin}_${user.uid}`;
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', id), {
                         gameId: pin, userId: user.uid, nickname, score: 0, answers: {}
                     });
                     setPlayerDocId(id);
                     setGame({ pin });
-                } catch (e) { setErrorMsg("Erro ao entrar. Verifique o PIN."); }
+                } catch (e) { 
+                    setErrorMsg("Erro ao ligar ao servidor. Verifique a rede."); 
+                }
             };
 
             useEffect(() => {
                 if (!game?.pin || !playerDocId) return;
                 const unsubGame = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'games', game.pin), (snap) => {
                     if (snap.exists()) setGame(snap.data());
+                    else setErrorMsg("A sala de jogo foi removida.");
                 });
                 const unsubPlayer = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), (snap) => {
                     if (snap.exists()) {
@@ -494,10 +574,11 @@
                 const q = game.questions[game.currentQuestionIndex];
                 const correct = idx === q.correctIndex;
                 const basePoints = 500;
-                const bonus = correct ? Math.round(500 * (1 - (Date.now() - (game.endTime - game.timePerQuestion*1000))/(game.timePerQuestion*1000))) : 0;
+                const timeRatio = 1 - (Date.now() - (game.endTime - game.timePerQuestion*1000))/(game.timePerQuestion*1000);
+                const bonus = correct ? Math.round(500 * Math.max(0, timeRatio)) : 0;
                 setAnswerResult(correct ? 'correct' : 'incorrect');
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', playerDocId), {
-                    score: myScore + (correct ? (basePoints + Math.max(0, bonus)) : 0),
+                    score: myScore + (correct ? (basePoints + bonus) : 0),
                     [`answers.${game.currentQuestionIndex}`]: { optionIndex: idx, correct }
                 });
             };
@@ -505,49 +586,61 @@
             if (!game?.status) {
                 return (
                     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-                        <form onSubmit={join} className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-sm">
-                            <h2 className="text-3xl font-black mb-8 text-center text-gray-800">SUPERANDO-SE</h2>
-                            <input type="text" placeholder="PIN DO JOGO" value={pin} onChange={(e)=>setPin(e.target.value)} className="w-full text-center text-5xl font-black p-5 border-4 border-gray-100 rounded-2xl mb-4 focus:border-blue-500 outline-none transition-colors" maxLength="6" />
-                            <input type="text" placeholder="TEU APELIDO" value={nickname} onChange={(e)=>setNickname(e.target.value)} className="w-full text-center font-black p-4 border-2 border-gray-100 rounded-xl mb-6 outline-none" maxLength="12" />
-                            {errorMsg && <p className="text-red-500 text-xs text-center mb-4 font-bold">{errorMsg}</p>}
-                            <button className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-blue-700 transition-colors">VAMOS LÁ!</button>
+                        <form onSubmit={join} className="bg-white p-10 rounded-[3rem] shadow-2xl w-full max-w-sm border-b-8 border-gray-100">
+                            <h2 className="text-4xl font-black mb-10 text-center text-gray-800 italic tracking-tighter">Entrar</h2>
+                            <div className="space-y-4">
+                                <input type="text" placeholder="PIN DO JOGO" value={pin} onChange={(e)=>setPin(e.target.value)} className="w-full text-center text-5xl font-black p-6 border-4 border-gray-100 rounded-[2rem] focus:border-blue-500 outline-none transition-all placeholder:opacity-20 uppercase tracking-tighter" maxLength="6" />
+                                <input type="text" placeholder="O TEU APELIDO" value={nickname} onChange={(e)=>setNickname(e.target.value)} className="w-full text-center font-black p-4 border-2 border-gray-100 rounded-2xl outline-none focus:border-purple-400 placeholder:opacity-30 uppercase text-lg" maxLength="12" />
+                            </div>
+                            {errorMsg && <p className="text-red-500 text-xs text-center mt-6 font-bold uppercase tracking-tight italic">{errorMsg}</p>}
+                            <button className="w-full mt-10 bg-blue-600 text-white py-6 rounded-[2rem] font-black text-2xl shadow-[0_8px_0_rgb(30,64,175)] hover:bg-blue-700 active:translate-y-2 active:shadow-none transition-all uppercase tracking-tighter italic">Jogar!</button>
                         </form>
                     </div>
                 );
             }
 
-            if (game.status === 'lobby') return <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-8 text-white"><h1 className="text-5xl font-black mb-4 animate-pulse uppercase">DENTRO!</h1><p className="text-xl font-bold opacity-80">Vê o teu nome no ecrã do professor.</p></div>;
+            if (game.status === 'lobby') return <div className="min-h-screen bg-green-500 flex flex-col items-center justify-center p-8 text-white"><h1 className="text-6xl font-black mb-4 animate-bounce uppercase tracking-tighter italic">Estás dentro!</h1><p className="text-2xl font-bold opacity-70 italic tracking-tight">O jogo começa em breve...</p></div>;
 
             if (game.status === 'question') {
-                if (hasAnswered) return <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center text-white"><Loader2 className="animate-spin w-16 h-16 opacity-30 mb-4" /><p className="font-black text-2xl uppercase tracking-widest italic opacity-50">Enviado!</p></div>;
+                if (hasAnswered) return <div className="min-h-screen bg-purple-700 flex flex-col items-center justify-center text-white"><Loader2 className="animate-spin w-20 h-20 opacity-20 mb-6" /><p className="font-black text-4xl uppercase italic opacity-40 animate-pulse">Enviado!</p></div>;
                 return (
-                    <div className="min-h-screen grid grid-cols-2 grid-rows-2 gap-2 p-2 bg-gray-200">
-                        {[0,1,2,3].map(i => <button key={i} onClick={()=>submit(i)} className={`${SHAPE_COLORS[i]} rounded-3xl flex items-center justify-center shadow-xl active:scale-95 transition-transform`}>{React.createElement(SHAPE_ICONS[i], {className: "w-28 h-28 fill-white"})}</button>)}
+                    <div className="min-h-screen grid grid-cols-2 grid-rows-2 gap-3 p-3 bg-gray-200">
+                        {[0,1,2,3].map(i => (
+                            <button key={i} onClick={()=>submit(i)} className={`${SHAPE_COLORS[i]} rounded-[2.5rem] flex items-center justify-center shadow-xl active:scale-90 transition-all border-b-[12px] border-black/10`}>
+                                {React.createElement(SHAPE_ICONS[i], {className: "w-32 h-32 fill-white drop-shadow-lg"})}
+                            </button>
+                        ))}
                     </div>
                 );
             }
 
-            if (game.status === 'leaderboard') return <div className={`min-h-screen flex flex-col items-center justify-center text-white transition-colors duration-500 ${answerResult==='correct'?'bg-green-500':'bg-red-500'}`}><h1 className="text-8xl font-black mb-4">{answerResult==='correct'?'SIM!':'NÃO!'}</h1><p className="text-2xl font-bold opacity-80 uppercase tracking-widest">Total: {myScore} pts</p></div>;
+            if (game.status === 'leaderboard') return <div className={`min-h-screen flex flex-col items-center justify-center text-white transition-colors duration-500 ${answerResult==='correct'?'bg-green-500':'bg-red-500'}`}>
+                <h1 className="text-[10rem] font-black leading-none mb-6 animate-pulse tracking-tighter italic">{answerResult==='correct'?'SIM!':'OH!'}</h1>
+                <p className="text-3xl font-black opacity-80 uppercase tracking-widest italic">{myScore} pts</p>
+            </div>;
 
-            if (game.status === 'podium') return <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white p-8"><h1 className="text-4xl font-black mb-4 uppercase tracking-tighter italic">Acabou!</h1><div className="bg-white/10 p-10 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-md text-center"><p className="font-bold text-purple-300 uppercase text-xs mb-2">Tua Pontuação</p><p className="text-7xl font-black text-white">{myScore}</p></div></div>;
+            if (game.status === 'podium') return <div className="min-h-screen bg-purple-900 flex flex-col items-center justify-center text-white p-8"><h1 className="text-5xl font-black mb-10 uppercase tracking-tighter italic opacity-50">Fim de Jogo</h1><div className="bg-white/10 p-12 rounded-[3rem] border border-white/10 shadow-2xl backdrop-blur-md text-center"><p className="font-black text-purple-300 uppercase text-xs mb-4 tracking-widest">Total Final</p><p className="text-8xl font-black text-white tracking-tighter">{myScore}</p></div><p className="mt-12 animate-pulse text-purple-300 font-bold italic tracking-tight">Aguardando a correção do professor...</p></div>;
 
             if (game.status === 'report') {
                 return (
                     <div className="min-h-screen bg-gray-100 p-6 overflow-y-auto">
-                        <div className="max-w-2xl mx-auto">
-                            <h1 className="text-3xl font-black mb-8 text-purple-900 italic">TEU DESEMPENHO</h1>
+                        <div className="max-w-xl mx-auto">
+                            <h1 className="text-4xl font-black mb-10 text-purple-900 italic tracking-tighter uppercase">Teu Desempenho</h1>
                             <div className="space-y-6">
                                 {game.questions.map((q, i) => (
-                                    <div key={i} className="bg-white p-8 rounded-3xl shadow-lg border-2 border-gray-100">
-                                        <div className="flex justify-between items-start gap-4 mb-4">
-                                            <p className="font-black text-xl leading-tight">{i+1}. {q.question}</p>
-                                            <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${myAnswers[i]?.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{myAnswers[i]?.correct ? '✓' : '✗'}</div>
+                                    <div key={i} className={`bg-white p-8 rounded-[2.5rem] shadow-lg border-2 ${myAnswers[i]?.correct ? 'border-green-100' : 'border-red-100'}`}>
+                                        <div className="flex justify-between items-start gap-4 mb-6">
+                                            <p className="font-black text-xl leading-tight tracking-tight italic">{i+1}. {q.question}</p>
+                                            <div className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-2xl ${myAnswers[i]?.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white shadow-red-200 shadow-lg'}`}>{myAnswers[i]?.correct ? '✓' : '✗'}</div>
                                         </div>
-                                        <div className="p-4 bg-purple-50 rounded-2xl text-sm leading-relaxed border border-purple-100 italic shadow-inner">{q.explanation}</div>
+                                        <div className="bg-purple-50 p-6 rounded-2xl text-sm leading-relaxed text-gray-700 border border-purple-100 italic shadow-inner">
+                                            <div className="font-black text-[9px] uppercase opacity-40 mb-2">Resolução</div>
+                                            {q.explanation}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                            <button onClick={onExit} className="w-full mt-10 bg-gray-900 text-white py-5 rounded-2xl font-black text-xl shadow-2xl">SAIR</button>
+                            <button onClick={onExit} className="w-full mt-10 bg-gray-900 text-white py-6 rounded-[2rem] font-black text-2xl shadow-2xl uppercase tracking-tighter italic">Sair do Jogo</button>
                         </div>
                     </div>
                 );
